@@ -1,0 +1,31 @@
+{
+ "name": "Enquêtes – carnet d'indices",
+ "short_name": "Enquêtes",
+ "start_url": "./index.html",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#14161c",
+ "theme_color": "#14161c",
+ "icons": [
+  {
+   "src": "ico192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "ico512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icomask.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "id": "./index.html"
+}
