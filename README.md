@@ -1,0 +1,79 @@
+ENQUÊTES – carnet d'indices (V1)
+================================
+
+CE QUE FAIT L'APP
+- Charge le PDF d'une enquête (bouton « + » sur l'accueil), le garde sur votre téléphone.
+- Page d'indices : vous choisissez la page, ajustez le cadre rouge, l'app détecte les indices
+  (séparés par un grand saut de ligne), vous pouvez fusionner / scinder / corriger.
+- L'indice en cours reste affiché en haut, avec sa couleur. Liste, ▲ et ▼ pour changer d'indice.
+- Au premier lancement d'une enquête : étape 1 = page des indices, étape 2 = QR code / lien officiel (cherché automatiquement).
+- Outils : un tap active / désactive ; un APPUI LONG sur Surligner / Barrer / Pinceau ouvre leurs options.
+- Barrer : la première croix demande la taille (faire glisser), ensuite un tap suffit ; appui long sur une croix = la modifier.
+- Notes (icône sous la pastille), mots des indices surlignables d'un tap, numéro de page cliquable.
+- Gomme : appui long = choisir « élément entier » ou « au trait » (efface seulement la partie touchée d'un trait de pinceau).
+- Surligner un mot d'un indice : APPUI LONG sur le mot (évite les erreurs).
+- Défilement vertical ou horizontal : Paramètres.
+- Surligner : touchez un prénom (détection automatique sur l'image) ou faites glisser pour tracer.
+- Barrer : touchez une fiche (taille mémorisée), poignées pour ajuster, curseur d'épaisseur.
+- Pinceau, gomme, annuler. Pincer = zoom, deux doigts = déplacer, double tap = zoom.
+- Sauvegarde automatique après chaque action + reprise à la même page / au même indice.
+- Menu (≡) : accueil, valider le suspect (lien officiel), indices, paramètres.
+
+CONFIDENTIALITÉ
+- Aucune donnée n'est envoyée nulle part : le code ne fait aucune requête réseau.
+- Le PDF et la progression sont dans la mémoire du navigateur de l'appareil (IndexedDB).
+- Le site qui héberge l'app ne sert que les fichiers de l'app, jamais vos PDF.
+
+MISE EN LIGNE AVEC GITHUB PAGES (gratuit, sans bandeau publicitaire)
+1. Créez un compte sur github.com, puis un dépôt PUBLIC (« New repository »).
+2. Dézippez le dossier de l'app sur votre ordinateur. Dans le dépôt : « uploading an existing file »
+   (ou Add file > Upload files). Glissez-y les FICHIERS (pas le zip, pas un dossier). Puis « Commit changes ».
+3. Paramètres (Settings) > Pages > « Deploy from a branch » > branche « main », dossier « / (root) » > Save.
+4. Attendez 1 à 2 minutes, rechargez la page Pages : l'adresse du site s'affiche en haut
+   (de la forme https://votrenom.github.io/nom-du-depot/). C'est le lien de l'app.
+
+INSTALLER L'APP SUR UN TÉLÉPHONE (à faire une seule fois, avec internet)
+1. Ouvrez le lien dans Chrome (Android).
+2. Menu Chrome ⋮ > « Installer l'application » (ou « Ajouter à l'écran d'accueil »). Confirmez.
+3. L'icône apparaît sur l'écran d'accueil. Ouvrez l'app une première fois avec internet : ensuite elle fonctionne SANS connexion.
+Sur iPhone : ouvrez le lien dans Safari > Partager > « Sur l'écran d'accueil ».
+
+PARTAGER L'APP
+- Envoyez simplement le lien. Chaque personne installe l'app et charge ses propres PDF.
+- Rien n'est partagé entre les personnes : les PDF et la progression restent sur chaque téléphone.
+- Les fichiers de l'app sont publics (tout le monde peut les voir), mais jamais vos PDF ni votre progression.
+
+METTRE À JOUR L'APP
+- Dans le dépôt GitHub : déposez les nouveaux fichiers au même endroit (ils remplacent les anciens), « Commit changes ».
+- Attendez 1 à 2 minutes, puis fermez complètement l'app et rouvrez-la (deux fois si besoin).
+
+CHANGER D'ADRESSE (ex. venir de Netlify)
+- Les données sont liées à l'adresse du site : une nouvelle adresse = une app vide.
+- Sur l'ancienne app : Paramètres > Copie de secours > Exporter. Sur la nouvelle : rechargez le même PDF, puis Importer.
+- Une fois tout vérifié, désinstallez l'ancienne app.
+
+SAUVEGARDE
+- Paramètres > « Copie de secours » > Exporter : fichier .json (indices, surlignages, croix, progression).
+  À refaire de temps en temps. Pour restaurer : rechargez le même PDF puis Importer.
+- Paramètres > « Stockage protégé » : demande au navigateur de ne pas effacer les données.
+- Ne videz pas « les données du site » dans Chrome, cela efface les enquêtes.
+
+V5 : rappel de sauvegarde (tous les 7 jours à l'ouverture + à la fin d'une enquête), 2 sauvegardes en alternance,
+export direct vers « Téléchargements » (ou partage), tri de l'accueil (Nom / Import / État), date d'import sur les couvertures.
+
+V8 : notes multiples (appui = panneau, appui long = vue d'ensemble triable ; une note épinglée sous l'indice avec « + »),
+pages masquables (sous le bouton notes : appui long = masquer la page, appui simple = afficher/re-masquer),
+tutoriel passable (accueil au premier lancement, lecteur à la première enquête ; Paramètres > Aide pour le revoir).
+
+=== V10 ===
+NOTES PAR INDICE
+- Chaque indice peut avoir sa note : elle s'affiche en bas du cadre, sous l'indice, en petit italique.
+- Icône note, appui simple : écrire / modifier la note de l'indice affiché.
+- Icône note, appui long : toutes les notes (celles des indices + notes libres non rattachées à un indice, réordonnables).
+INDICES VALIDÉS
+- Bouton « Valider » en haut du cadre : l'indice est marqué terminé et les flèches ↑ ↓ le sautent.
+- Dans la liste des indices : il apparaît barré/estompé ; le rond ✓ à droite le valide ou le réactive.
+- Pour réactiver : retouchez « Validé » dans le cadre, ou le rond ✓ dans la liste.
+
+=== Icône ===
+- Android garde l'ancienne icône d'un raccourci : supprimez l'ancien raccourci (ou désinstallez l'app), puis rajoutez-la depuis le navigateur.
