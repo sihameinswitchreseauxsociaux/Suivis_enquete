@@ -19,6 +19,7 @@ function h(tag, attrs, ...kids) {
   return e;
 }
 const IC = {
+  img: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/><circle cx="12" cy="12" r="7"/>',
@@ -49,7 +50,7 @@ IC.grip = '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" str
 IC.pgoff = '<path d="M6 3h9l4 4v14H6z"/><path d="M3 3l18 18"/>';
 IC.note = '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>';
 const PALETTE = ['#e6194b', '#4363d8', '#3cb44b', '#f58231', '#911eb4', '#46d2e6', '#ffe119', '#f032e6', '#9a6324', '#a8d81f'];
-const DEF = { autosave: true, backupDays: 7, exportMode: 'download', sort: { k: 'import', dir: 'asc' }, eraseMode: 'el', eraseR: 16, shape: 'cross', custom: null, hlOp: 0.5, sens: 1, scroll: 'v', thick: 0.012, brushW: 0.006, hide: { brush: false, erase: false, undo: false, save: false }, welcome: { name: 'enquêteur', sub: 'Sauras-tu trouver qui est le coupable ?' } };
+const DEF = { autosave: true, backupDays: 7, exportMode: 'download', sort: { k: 'import', dir: 'asc' }, eraseMode: 'el', eraseR: 16, shape: 'cross', custom: null, hlOp: 0.5, sens: 1, scroll: 'v', thick: 0.012, brushW: 0.006, hide: { hl: false, col: false, cross: false, brush: false, erase: false, undo: false, save: false, page: false, notes: false, pgoff: false }, seenVer: '', showPend: true, hidePend: [], remind: true, wizAsked: false, ui: { order: ['clue', 'vp', 'tools', 'nav'], scale: 1, cmh: 112, ctlLeft: false, sideRight: false, compact: false }, welcome: { name: 'enquêteur', sub: 'Sauras-tu trouver qui est le coupable ?' } };
 
 const S = { db: null, books: [], cur: null, doc: null, settings: null, tool: null, undo: [], sel: null, optsOpen: false, lastCol: PALETTE[0] };
 
@@ -61,7 +62,7 @@ function toast(msg, ms = 2200) {
 }
 function openModal(title, body, btns, opts = {}) {
   const ov = h('div', { class: 'modal' + (opts.full ? ' full' : '') });
-  const api = { el: ov, close: v => { ov.remove(); api.res && api.res(v); opts.onclose && opts.onclose(); } };
+  const api = { el: ov, close: v => { ov.remove(); api.res && api.res(v); opts.onclose && opts.onclose(); } }; ov._api = api; ov._noclose = !!opts.noclose;
   api.promise = new Promise(r => api.res = r);
   ov.append(h('div', { class: 'box' },
     h('div', { class: 'mh' }, h('b', {}, title), opts.noclose ? h('span') : h('button', { onclick: () => api.close(null), 'aria-label': 'Fermer' }, ic('close'))),
@@ -101,7 +102,43 @@ async function loadSettings() {
   applyHide();
 }
 const saveSettings = () => dbPut('kv', JSON.parse(JSON.stringify(S.settings)), 'settings').catch(console.error);
-function applyHide() { for (const k of ['brush', 'erase', 'undo', 'save']) document.body.classList.toggle('h-' + k, !!S.settings.hide[k]); }
+const HIDE_ITEMS = [['hl', 'Surligner', ''], ['col', 'Couleur', 'Bouton de changement de couleur'], ['cross', 'Barrer', ''], ['brush', 'Pinceau', ''], ['erase', 'Gomme', ''], ['undo', 'Annuler', ''],
+  ['save', 'Enregistrer', 'Icône d’enregistrement (le mode automatique continue de fonctionner)'], ['page', 'Page', 'Flèches et numéro de page (on peut toujours faire défiler)'],
+  ['notes', 'Notes', 'Bouton notes et affichage des notes sous l’indice'], ['pgoff', 'Masquer des pages', 'Désactivé : toutes les pages s’affichent']];
+const HIDE_KEYS = ['hl', 'col', 'cross', 'brush', 'erase', 'undo', 'save', 'page', 'notes', 'pgoff'];
+const UI_KEYS = ['clue', 'vp', 'tools', 'nav'];
+function normUI() {
+  const u = Object.assign({}, DEF.ui, S.settings.ui || {});
+  if (!Array.isArray(u.order) || u.order.length !== 4 || UI_KEYS.some(k => !u.order.includes(k))) u.order = [...DEF.ui.order];
+  u.scale = clamp(+u.scale || 1, 0.8, 1.6); u.cmh = clamp(+u.cmh || 112, 70, 320); S.settings.ui = u; return u;
+}
+function applyUI() {
+  const u = normUI(), root = document.documentElement.style; document.body.classList.toggle('compact', !!u.compact);
+  root.setProperty('--ctxs', u.scale); root.setProperty('--cmh', u.cmh + 'px');
+  const r = document.querySelector('#reader'); if (!r || !r.querySelector('#bar')) return;
+  const map = { clue: '#cluebar', vp: '#vp', tools: '#bar .row.a', nav: '#bar .row.b' }, def = u.order.join() === UI_KEYS.join();
+  r.classList.toggle('ui-custom', !def);
+  ['#cluebar', '#vp', '#opts', '#bar .row.a', '#bar .row.b'].forEach(s => { const e = r.querySelector(s); if (e) e.style.order = ''; });
+  if (!def) { u.order.forEach((k, i) => { const e = r.querySelector(map[k]); if (e) e.style.order = (i + 1) * 10; }); const o = r.querySelector('#opts'); if (o) o.style.order = (u.order.indexOf('tools') + 1) * 10 + 1; }
+  const cb = r.querySelector('#cluebar'); if (cb) { cb.classList.toggle('ctl-left', !!u.ctlLeft); cb.classList.toggle('side-right', !!u.sideRight); }
+}
+function applyHide() {
+  applyUI();
+  const hd = S.settings.hide, cl = document.body.classList;
+  for (const k of HIDE_KEYS) cl.toggle('h-' + k, !!hd[k]);
+  cl.toggle('h-tools', ['hl', 'col', 'cross', 'brush', 'erase', 'undo'].every(k => hd[k]));
+  cl.toggle('h-side', !!hd.notes && !!hd.pgoff);
+  const bar = document.querySelector('#bar'); if (!bar) return;
+  /* si la rangée du bas se vide (page masquée), Menu et Enregistrer montent sur la rangée des outils quand il y a la place */
+  const ra = bar.querySelector('.row.a'), rb = bar.querySelector('.row.b'), mb = document.querySelector('#mbtn'), sv = document.querySelector('#sv');
+  const nT = ['hl', 'col', 'cross', 'brush', 'erase', 'undo'].filter(k => !hd[k]).length;
+  const merge = !!hd.page && nT > 0 && nT + (hd.save ? 0 : 1) + 1 <= 6;
+  if (mb && sv && ra && rb) { if (merge) ra.append(sv, mb); else { rb.prepend(sv); rb.append(mb); } mb.classList.toggle('tb', merge); rb.style.display = merge ? 'none' : ''; }
+  if (S.cur) {
+    if (S.tool && hd[S.tool]) { S.tool = null; S.optsOpen = false; S.sel = null; V.redrawAll(); updateToolUI(); }
+    V.refreshHidden(); pagesUI();
+  }
+}
 
 /* ---------------------------------------------------------------- sauvegarde */
 const SV = { state: 'saved', timer: null };
@@ -163,8 +200,10 @@ function renderHome() {
       b.addedAt ? h('div', { class: 'dt' }, monthYear(b.addedAt)) : null,
       h('div', { class: 'more', onclick: e => { e.stopPropagation(); bookMenu(b); } }, ic('more', 18)),
       h('div', { class: 'cap' }, h('div', { class: 't' }, h('b', {}, b.title), b.status === 'done' && b.culprit ? h('small', {}, 'Coupable : ' + b.culprit) : h('small', {}, { new: 'Pas commencée', doing: 'En cours', done: 'Terminée' }[b.status])), statusIcon(b.status)))),
+    pendTiles(),
     S.books.length ? null : h('div', { class: 'empty' }, 'Aucun dossier pour l’instant. Touchez « + » pour ouvrir le PDF d’une enquête.'));
   home.append(...[h('div', { class: 'top' }, h('h1', {}, S.firstRun ? `Bienvenue ${welcomeName()} 🔎` : `Bon retour ${welcomeName()} 🕵️`), (S.settings.welcome.sub || '').trim() ? h('p', { class: 'sub' }, S.settings.welcome.sub.trim()) : null),
+    ...homeBanners(),
     S.books.length > 1 ? h('div', { class: 'sortbar' }, h('span', {}, 'Trier :'), chip('name', 'Nom'), chip('import', 'Import'), chip('state', 'État')) : null, grid,
     h('div', { class: 'bbar' },
       h('button', { class: 'nb on' }, ic('home'), h('span', {}, 'Accueil')),
@@ -199,7 +238,7 @@ async function addBooks(files) {
       doc.destroy(); toast('Enquête ajoutée ✓');
     } catch (e) { console.error(e); toast('Impossible de lire ce PDF'); }
   }
-  renderHome();
+  await refreshPend(); renderHome();
 }
 
 /* ---------------------------------------------------------------- ouverture d'une enquête */
@@ -216,12 +255,12 @@ async function openBook(id) {
     buildReader(); await V.load(doc, book); setClue(book.clueIdx || 0, true); setSave('saved'); changed(true);
     $('#toast') && ($('#toast').style.display = 'none');
     if (!S.settings.tutoReader) { await startTuto('reader'); S.settings.tutoReader = true; saveSettings(); }
-    if (!book.clues.length) openClueSetup({ wizard: true }); else if (!book.linkDone) openLinkSetup({ wizard: true });
+    if (!book.clues.length) openClueSetup({ wizard: true }); else if (!book.linkDone) openLinkSetup({ wizard: true }); else if (!book.cardAsked && !book.crossSize) setTimeout(askCards, 400);
   } catch (e) { console.error(e); toast('Erreur à l’ouverture du PDF'); goHome(); }
 }
 async function goHome() {
   V.savePos(); if (S.cur) await doSave(true);
-  S.cur = null; $('#reader').classList.add('hidden'); $('#home').classList.remove('hidden'); V.unload(); renderHome();
+  S.cur = null; $('#reader').classList.add('hidden'); $('#home').classList.remove('hidden'); V.unload(); renderHome(); homeChecks();
 }
 
 /* ---------------------------------------------------------------- lecteur : interface */
@@ -267,7 +306,7 @@ function buildReader() {
             h('span', { id: 'ptot' }, '/ ' + S.cur.numPages)),
           h('button', { class: 'ar', onclick: () => V.step(1), 'aria-label': 'Page suivante' }, ic('right'))),
         h('button', { id: 'mbtn', onclick: openDrawer }, ic('menu'), h('span', {}, 'Menu')))));
-  setSave(SV.state); updateToolUI(); V.init(); pagesUI();
+  setSave(SV.state); updateToolUI(); V.init(); pagesUI(); applyHide();
 }
 function longTool(k) {
   if (S.tool !== k) { S.tool = k; S.sel = null; S.optsOpen = true; } else S.optsOpen = !S.optsOpen;
@@ -339,6 +378,50 @@ function sortDrag(e, row, list, onCommit) {
   };
   grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
 }
+/* ---------------------------------------------------------------- images liées aux indices */
+function toggleClueImg(i) { const c = S.cur.clues[i]; c.imgOn = !c.imgOn; setClue(i, true); changed(); }
+function openImgViewer(c) {
+  let big = false; const img = h('img', { src: c.img, alt: '', style: 'display:block;width:100%;background:#fff;border-radius:6px' });
+  const box = h('div', { style: 'overflow:auto;max-height:68vh;-webkit-overflow-scrolling:touch' }, img);
+  openModal('Image de l’indice', box, [{ label: 'Agrandir / réduire', fn: () => { big = !big; img.style.width = big ? '230%' : '100%'; return false; } }, { label: 'Fermer', cls: 'pri', value: 1 }]);
+}
+function pickImageRegion(startPage, o = {}) {
+  return new Promise(resolve => {
+    const doc = S.doc, N = doc.numPages; let pg = clamp(startPage != null ? startPage : 0, 0, N - 1), rect = o.rect ? { ...o.rect } : { x: 0.08, y: 0.3, w: 0.84, h: 0.2 }, vpt = null, lt = 0, result = null;
+    const stageEl = h('div', { id: 'sst' }), pnum = h('b', {});
+    const rectEl = h('div', { id: 'sr' }, ['tl', 'tr', 'br', 'bl'].map(k => h('i', { 'data-h': k, style: (k[0] === 't' ? 'top:0;' : 'top:100%;') + (k[1] === 'l' ? 'left:0' : 'left:100%') })));
+    const nav = h('div', { style: 'display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0' }, h('button', { class: 'btn sm', onclick: () => go(-1) }, '◀'), h('span', {}, 'Page ', pnum), h('button', { class: 'btn sm', onclick: () => go(1) }, '▶'));
+    const info = h('div', { style: 'text-align:center;font-size:13px;color:var(--mut);margin:6px 0' }, o.info || 'Allez à la page de l’image, puis placez le cadre rouge autour (coins = taille, intérieur = déplacer).');
+    const drawRect = () => Object.assign(rectEl.style, { left: rect.x * 100 + '%', top: rect.y * 100 + '%', width: rect.w * 100 + '%', height: rect.h * 100 + '%' });
+    async function load() {
+      const my = ++lt; pnum.textContent = `${pg + 1} / ${N}`; stageEl.innerHTML = '';
+      const p = await doc.getPage(pg + 1); if (my !== lt) return; const base = p.getViewport({ scale: 1 }); const w = fitW(base.height / base.width, 330);
+      vpt = p.getViewport({ scale: Math.min(w * (devicePixelRatio || 1), 1600) / base.width }); const c = document.createElement('canvas'); c.width = Math.round(vpt.width); c.height = Math.round(vpt.height);
+      stageEl.style.width = w + 'px'; stageEl.append(c, rectEl); drawRect(); await p.render({ canvasContext: c.getContext('2d'), viewport: vpt }).promise;
+    }
+    function go(d) { pg = clamp(pg + d, 0, N - 1); load(); }
+    let drag = null;
+    rectEl.addEventListener('pointerdown', e => { e.preventDefault(); rectEl.setPointerCapture(e.pointerId); drag = { k: e.target.dataset.h || 'move', r: stageEl.getBoundingClientRect(), rect: { ...rect }, x: e.clientX, y: e.clientY }; });
+    rectEl.addEventListener('pointermove', e => {
+      if (!drag) return; const dx = (e.clientX - drag.x) / drag.r.width, dy = (e.clientY - drag.y) / drag.r.height, o = drag.rect; let { x, y, w, h: hh } = o;
+      if (drag.k === 'move') { x = clamp(o.x + dx, 0, 1 - o.w); y = clamp(o.y + dy, 0, 1 - o.h); }
+      else { if (drag.k[1] === 'l') { x = clamp(o.x + dx, 0, o.x + o.w - 0.03); w = o.x + o.w - x; } else w = clamp(o.w + dx, 0.03, 1 - o.x); if (drag.k[0] === 't') { y = clamp(o.y + dy, 0, o.y + o.h - 0.02); hh = o.y + o.h - y; } else hh = clamp(o.h + dy, 0.02, 1 - o.y); }
+      rect = { x, y, w, h: hh }; drawRect();
+    });
+    const end = () => { drag = null; }; rectEl.addEventListener('pointerup', end); rectEl.addEventListener('pointercancel', end);
+    async function crop() {
+      const p = await doc.getPage(pg + 1), base = p.getViewport({ scale: 1 }), fullW = clamp(1100 / rect.w, 600, 2600), v = p.getViewport({ scale: fullW / base.width });
+      const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height); await p.render({ canvasContext: c.getContext('2d'), viewport: v }).promise;
+      const sx = Math.round(rect.x * c.width), sy = Math.round(rect.y * c.height), sw = Math.max(8, Math.round(rect.w * c.width)), sh = Math.max(8, Math.round(rect.h * c.height));
+      const o = document.createElement('canvas'); o.width = sw; o.height = sh; o.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
+      const url = o.toDataURL('image/jpeg', 0.86); c.width = c.height = 0; return url;
+    }
+    const m = openModal(o.title || 'Choisir l’image de l’indice', h('div', {}, o.intro ? h('div', { class: 'note', style: 'margin:0 0 4px;font-size:14px' }, o.intro) : null, nav, stageEl, info),
+      [{ label: o.cancel || 'Annuler', value: 0 }, { label: o.ok || 'Utiliser cette zone', cls: 'pri', value: 1, fn: async () => { try { if (o.raw) { result = { pg, rect: { ...rect }, ratio: vpt.height / vpt.width }; return; } result = await crop(); } catch (e) { console.error(e); toast('Impossible de découper cette zone'); return false; } } }], { full: true });
+    m.promise.then(v => resolve(v === 1 ? result : null)); load();
+  });
+}
+
 /* indices */
 const lum = hx => { const n = parseInt((hx || '#888888').slice(1, 7), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
 function renderClueText(el, c, onTap) {
@@ -359,12 +442,15 @@ function setClue(i, silent) {
   const b = S.cur, n = b.clues.length; const dot = $('#cdot'), tx = $('#ctext'), ct = $('#ccount'), cm = $('#cmain');
   const st0 = tx.scrollTop, sameIdx = n && b.clueIdx === clamp(i, 0, Math.max(0, n - 1)); ct.innerHTML = '';
   if (!n) { dot.style.background = '#ccc'; tx.className = 'none'; tx.textContent = 'Aucun indice défini – touchez ici'; cm.onclick = () => openClueSetup({}); updateToolUI(); V.layout(); return; }
-  cm.onclick = null; b.clueIdx = clamp(i, 0, n - 1); const c = b.clues[b.clueIdx];
+  cm.onclick = null; b.clueIdx = clamp(i, 0, n - 1); const c = b.clues[b.clueIdx]; cm.style.setProperty('--cc', c.color);
   dot.style.background = c.color; tx.className = c.done ? 'isdone' : '';
   const nAct = b.clues.filter(x => !x.done).length;
   ct.append(h('span', { class: 'ctl' }, `Indice ${b.clueIdx + 1} / ${n}`, c.done ? ' · validé' : (nAct < n ? ` · ${nAct} actif${nAct > 1 ? 's' : ''}` : '')), h('span', { style: 'flex:1' }),
+    ...(c.img ? [h('button', { id: 'cimg', class: 'cvalid' + (c.imgOn ? ' on' : ''), 'aria-label': c.imgOn ? 'Masquer l’image de l’indice' : 'Afficher l’image de l’indice', onclick: () => toggleClueImg(b.clueIdx) }, ic('img', 14), 'Image')] : []),
     h('button', { id: 'cvalid', class: 'cvalid' + (c.done ? ' on' : ''), 'aria-label': c.done ? 'Réactiver l’indice' : 'Marquer l’indice comme validé', onclick: () => toggleDone(b.clueIdx) }, ic('check', 14), c.done ? 'Validé' : 'Valider'));
-  renderClueText(tx, c, wi => { c.hl = c.hl || []; const k = c.hl.indexOf(wi); if (k < 0) c.hl.push(wi); else c.hl.splice(k, 1); const st = tx.scrollTop; setClue(b.clueIdx, true); tx.scrollTop = st; changed(true); });
+  const showImg = !!(c.img && c.imgOn); cm.classList.toggle('showimg', showImg);
+  if (showImg && c.imgReplace) tx.innerHTML = ''; else renderClueText(tx, c, wi => { c.hl = c.hl || []; const k = c.hl.indexOf(wi); if (k < 0) c.hl.push(wi); else c.hl.splice(k, 1); const st = tx.scrollTop; setClue(b.clueIdx, true); tx.scrollTop = st; changed(true); });
+  if (showImg) tx.append(h('img', { class: 'cimg', src: c.img, alt: 'Image de l’indice', onclick: () => openImgViewer(c) }));
   if (c.note && c.note.trim()) tx.append(h('div', { class: 'cnote', onclick: openClueNote }, c.note));
   tx.scrollTop = sameIdx ? st0 : 0; updateToolUI(); V.layout(); if (!silent) changed(true);
 }
@@ -373,10 +459,13 @@ function toggleDone(i) {
   toast(c.done ? 'Indice validé – les flèches le sautent. Retouchez le bouton pour le réactiver.' : 'Indice réactivé', 2400);
 }
 function stepClue(d) {
-  const b = S.cur; if (!b.clues.length) return toast('Définissez d’abord les indices');
-  let i = b.clueIdx + d; while (i >= 0 && i < b.clues.length && b.clues[i].done) i += d;
-  if (i < 0 || i >= b.clues.length) return toast(b.clues.every(c => c.done) ? 'Tous les indices sont validés' : 'Pas d’autre indice actif dans ce sens', 1800);
-  setClue(i);
+  const b = S.cur, n = b.clues.length; if (!n) return toast('Définissez d’abord les indices');
+  const i0 = b.clueIdx; let j = -1;
+  for (let k = 1; k <= n; k++) { const t = ((i0 + d * k) % n + n) % n; if (!b.clues[t].done) { j = t; break; } }
+  if (j < 0) return toast('Tous les indices sont validés', 1800);
+  if (j === i0) return toast('Un seul indice actif', 1600);
+  const wrapped = d > 0 ? j < i0 : j > i0; setClue(j);
+  if (wrapped) { toast(d > 0 ? 'Retour au premier indice' : 'Retour au dernier indice', 1100); navigator.vibrate && navigator.vibrate(10); }
 }
 function setCurColor(c) { const cl = curClue(); S.lastCol = c; if (cl) { cl.color = c; setClue(S.cur.clueIdx, true); V.redrawAll(); changed(); } else updateToolUI(); }
 function pickColor(cur, cb) {
@@ -421,7 +510,7 @@ function updateToolUI() {
       const val = a ? a.th : (S.cur.crossTh || S.settings.thick);
       o.append(h('span', {}, 'Épaisseur'), h('input', { type: 'range', min: 0.003, max: 0.04, step: 0.001, value: val, oninput: e => setThick(parseFloat(e.target.value), false), onchange: e => setThick(parseFloat(e.target.value), true) }));
       if (a) o.append(h('button', { class: 'ob', onclick: () => removeAnn(a.id) }, ic('trash', 16), 'Suppr.'));
-      else o.append(h('button', { class: 'ob', onclick: () => { S.cur.crossSize = null; changed(); toast('La prochaine croix redemandera la taille', 2500); } }, 'Taille ↺'));
+      else o.append(h('button', { class: 'ob', onclick: () => openCardSetup() }, 'Fiches ⚙'));
       o.append(ok);
     } else if (t === 'brush') {
       o.append(h('span', {}, 'Épaisseur'), h('input', { type: 'range', min: 0.002, max: 0.02, step: 0.001, value: S.settings.brushW, onchange: e => { S.settings.brushW = parseFloat(e.target.value); saveSettings(); } }), ok);
@@ -466,7 +555,7 @@ function openDrawer() {
     it('list', 'Liste des indices', openClueList), it('pencil', 'Page / détection des indices', () => openClueSetup({})),
     it('flag', 'Lien officiel (QR code)', () => openLinkSetup({})),
     it('right', 'Aller à la page d’indices', () => S.cur.cluePage != null ? V.goTo(S.cur.cluePage) : toast('Page d’indices non définie')),
-    it('gear', 'Paramètres', openSettings), it('play', 'Tutoriel du lecteur', () => startTuto('reader')), h('div', { class: 'sp' }));
+    it('pencil', 'Fiches à barrer (taille)', openCardSetup), it('pencil', 'Personnaliser l’interface', openUiPanel), it('down', 'Exporter le PDF annoté', openExportPdf), it('gear', 'Paramètres', openSettings), it('play', 'Tutoriel du lecteur', () => startTuto('reader')), h('div', { class: 'sp' }));
   bg.addEventListener('pointerdown', close); document.body.append(bg, d);
 }
 
@@ -482,7 +571,7 @@ async function openValidate() {
   const name = h('input', { type: 'text', placeholder: 'Prénom du suspect', value: '' });
   const m = openModal('Valider le suspect', h('div', {},
     h('p', {}, '1. Ouvrez le site officiel et vérifiez votre suspect :'), url,
-    h('div', { style: 'margin:8px 0 16px' }, h('button', { class: 'btn pri', onclick: () => { const u = url.value.trim(); if (!/^https?:\/\//i.test(u)) return toast('Collez un lien commençant par http'); b.officialUrl = u; changed(true); window.open(u, '_blank', 'noopener'); } }, 'Ouvrir le site officiel')),
+    h('div', { style: 'margin:8px 0 16px' }, h('button', { class: 'btn pri', onclick: () => { let u = url.value.trim(); if (/^(?!https?:)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/|$)/i.test(u)) { u = 'https://' + u; url.value = u; } if (!/^https?:\/\//i.test(u)) return toast('Collez un lien valide'); b.officialUrl = u; changed(true); window.open(u, '_blank', 'noopener'); } }, 'Ouvrir le site officiel')),
     h('p', {}, '2. De retour ici, indiquez le suspect et le résultat :'), name),
     [{ label: 'Pas le bon', value: 'no', fn: () => { if (name.value.trim()) { (b.attempts = b.attempts || []).push({ name: name.value.trim(), ok: false, at: Date.now() }); changed(); } } },
     { label: 'C’était le bon ✓', cls: 'ok', value: 'yes', fn: () => { if (!name.value.trim()) { toast('Indiquez le nom du suspect'); return false; } b.culprit = name.value.trim(); b.status = 'done'; (b.attempts = b.attempts || []).push({ name: b.culprit, ok: true, at: Date.now() }); doSave(); toast('Enquête terminée 🎉'); if (S.settings.backupDays) setTimeout(() => backupPrompt('end'), 900); } }]);
@@ -593,7 +682,7 @@ const V = (() => {
   }
   function refLine() { return horiz() ? (-tx + vp.clientWidth * 0.5) / s : (-ty + vp.clientHeight * 0.3) / s; }
   function pageAt(v) { const hz = horiz(); let lastV = 0; for (let i = 0; i < pages.length; i++) { const p = pages[i]; if (p.hidden) continue; lastV = i; if (v < (hz ? p.left + p.w : p.top + p.h) + GAP / 2) return i; } return lastV; }
-  api.refreshHidden = (relayout = true) => { const dis = (book && book.disabled) || []; pages.forEach((p, i) => { const d = dis.includes(i); p.hidden = d && !S.showAllPages; p.el.classList.toggle('dim', d && !!S.showAllPages); }); if (relayout) doLayout(); };
+  api.refreshHidden = (relayout = true) => { const dis = (book && book.disabled) || []; pages.forEach((p, i) => { const d = dis.includes(i); const off = S.settings.hide.pgoff; p.hidden = d && !S.showAllPages && !off; p.el.classList.toggle('dim', d && !!S.showAllPages && !off); }); if (relayout) doLayout(); };
   const visIdx = i => { if (!pages[i] || !pages[i].hidden) return i; for (let k = i + 1; k < pages.length; k++) if (!pages[k].hidden) return k; for (let k = i - 1; k >= 0; k--) if (!pages[k].hidden) return k; return i; };
   function updateVisible(force) {
     if (!doc || !pages.length) return; const vw = vp.clientWidth, vh = vp.clientHeight;
@@ -639,19 +728,20 @@ const V = (() => {
     return `<path d="M${a.x} ${a.y}L${a.x + a.w} ${a.y + a.h}M${a.x + a.w} ${a.y}L${a.x} ${a.y + a.h}"/>`;
   }
   const ptsD = pts => pts.map((q, k) => (k ? 'L' : 'M') + q[0] + ' ' + q[1]).join('') + (pts.length === 1 ? `L${pts[0][0] + 0.0001} ${pts[0][1]}` : '');
-  api.drawPage = i => {
-    const p = pages[i]; if (!p || !book) return; let hl = '', dr = '';
+  api.annMarkup = (i, withSel) => {
+    const p = pages[i]; let hl = '', dr = ''; if (!p || !book) return { hl, dr };
     const op = S.settings.hlOp, hr = 13 / (p.w * s || 1);
     for (const a of book.ann) {
       if (a.page !== i) continue; const c = colorOf(a);
       if (a.t === 'h') hl += `<rect x="${esc(a.x)}" y="${esc(a.y)}" width="${esc(a.w)}" height="${esc(a.h)}" rx="0.003" fill="${c}" fill-opacity="${op}"/>`;
       else if (a.t === 'x') {
         dr += `<g fill="none" stroke="${c}" stroke-width="${a.th}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.92">${crossPath(a)}</g>`;
-        if (S.sel === a.id) { dr += `<rect x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="none" stroke="#2563eb" stroke-width="${hr * 0.15}" stroke-dasharray="${hr * 0.5} ${hr * 0.4}"/>`; for (const [cx, cy] of [[a.x, a.y], [a.x + a.w, a.y], [a.x + a.w, a.y + a.h], [a.x, a.y + a.h]]) dr += `<circle cx="${cx}" cy="${cy}" r="${hr}" fill="#fff" stroke="#2563eb" stroke-width="${hr * 0.2}"/>`; }
+        if (withSel && S.sel === a.id) { dr += `<rect x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="none" stroke="#2563eb" stroke-width="${hr * 0.15}" stroke-dasharray="${hr * 0.5} ${hr * 0.4}"/>`; for (const [cx, cy] of [[a.x, a.y], [a.x + a.w, a.y], [a.x + a.w, a.y + a.h], [a.x, a.y + a.h]]) dr += `<circle cx="${cx}" cy="${cy}" r="${hr}" fill="#fff" stroke="#2563eb" stroke-width="${hr * 0.2}"/>`; }
       } else if (a.t === 'b') dr += `<path d="${ptsD(a.pts)}" fill="none" stroke="${c}" stroke-width="${a.w}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.9"/>`;
     }
-    p.hl.innerHTML = hl; p.dr.innerHTML = dr;
+    return { hl, dr };
   };
+  api.drawPage = i => { const p = pages[i]; if (!p || !book) return; const m = api.annMarkup(i, true); p.hl.innerHTML = m.hl; p.dr.innerHTML = m.dr; };
   api.redrawAll = () => { for (let i = 0; i < pages.length; i++) api.drawPage(i); };
   const tmpDraw = (i, html) => { if (pages[i]) pages[i].tmp.innerHTML = html; };
   const clearTmp = () => pages.forEach(p => { if (p.tmp.innerHTML) p.tmp.innerHTML = ''; });
@@ -766,14 +856,24 @@ const V = (() => {
       case 'cdraw': {
         clearTmp();
         if (g.moved) { const p1 = toPage(q.x, q.y, g.p0.i); const r = rectOf(g.p0, p1); if (r.w > 0.02 && r.h > 0.02) newCross(g.p0.i, r); }
-        else if (!book.crossSize) toast('Première croix : faites glisser du doigt pour tracer la taille d’une fiche. Ensuite un simple tap suffira.', 4000);
-        else { const sz = book.crossSize; newCross(g.p0.i, { x: g.p0.x - sz.w / 2, y: g.p0.y - sz.h / 2, w: sz.w, h: sz.h }); } break;
+        else if (!book.crossSize) toast('Première croix : faites glisser du doigt pour tracer la taille d’une fiche (ou Menu ≡ > Fiches à barrer). Ensuite un simple tap suffira.', 4500);
+        else newCross(g.p0.i, cardRect(g.p0)); break;
       }
       case 'brush': { clearTmp(); if (g.pts.length) addAnn({ t: 'b', page: g.p0.i, pts: g.pts, w: S.settings.brushW }); break; }
       case 'erase': if (g.did) { pushUndo(g.before); if (S.cur.status === 'new') S.cur.status = 'doing'; updateToolUI(); changed(); } break;
       case 'move': case 'resize': if (g.a) { book.crossSize = { w: g.a.w, h: g.a.h }; if (pushUndo(g.before)) changed(); } break;
       case 'desel': if (!g.moved) { S.sel = null; api.redrawAll(); updateToolUI(); } break;
     }
+  }
+  function cardRect(p) {
+    const sz = book.crossSize, g = book.cardGrid, R = pages[p.i].ratio; let cx = p.x, cy = p.y;
+    if (g) {
+      const gx = g.x + g.w / 2, gy = g.y + g.h / 2; let sx = cx, sy = cy;
+      if (g.px) sx = gx + Math.round((p.x - gx) / g.px) * g.px;
+      if (g.py) sy = gy + Math.round((p.y - gy) / g.py) * g.py;
+      if (Math.abs(p.x - sx) <= sz.w / 2 && Math.abs(p.y - sy) <= sz.h / 2) { cx = sx; cy = sy; }
+    }
+    return { x: clamp(cx - sz.w / 2, 0, Math.max(0, 1 - sz.w)), y: clamp(cy - sz.h / 2, 0, Math.max(0, R - sz.h)), w: sz.w, h: sz.h };
   }
   function newCross(i, r) { addAnn({ t: 'x', page: i, ...r, th: book.crossTh || S.settings.thick, shape: S.settings.shape }); book.crossSize = { w: r.w, h: r.h }; }
   async function tapWord(p0) {
@@ -847,15 +947,23 @@ async function openClueSetup(opts = {}) {
   load();
 }
 function editClues(texts, fresh, after) {
-  const b = S.cur; const old = fresh ? [] : b.clues;
-  let rows = texts.map((t, i) => ({ id: (old[i] && old[i].id) || uid(), text: t, color: (old[i] && old[i].color) || PALETTE[i % PALETTE.length], hl: old[i] && old[i].text === t ? (old[i].hl || []) : [], note: (old[i] && old[i].note) || '', done: !!(old[i] && old[i].done) }));
+  const b = S.cur; const old = fresh ? [] : b.clues; const prev = b.clues;
+  let rows = texts.map((t, i) => ({ id: (old[i] && old[i].id) || uid(), text: t, color: (old[i] && old[i].color) || PALETTE[i % PALETTE.length], hl: old[i] && old[i].text === t ? (old[i].hl || []) : [], note: (old[i] && old[i].note) || '', done: !!(old[i] && old[i].done), ...(() => { const p = old[i] || prev.find(q => q.text === t) || {}; return p.img ? { img: p.img, imgReplace: !!p.imgReplace, imgOn: !!p.imgOn } : {}; })() }));
   const list = h('div', {});
+  const imgRow = r => {
+    const pick = async () => { const u = await pickImageRegion(b.cluePage != null ? b.cluePage : 0); if (u) { r.img = u; build(); } };
+    if (!r.img) return h('div', { style: 'margin:6px 0' }, h('button', { class: 'btn sm', onclick: pick }, ic('img', 16), ' Ajouter une image à cet indice'));
+    return h('div', { style: 'margin:6px 0;display:flex;flex-direction:column;gap:6px' },
+      h('img', { src: r.img, alt: '', style: 'max-width:100%;max-height:90px;object-fit:contain;align-self:flex-start;border:1px solid #ccc;border-radius:6px;background:#fff' }),
+      h('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px' }, h('input', { type: 'checkbox', checked: !!r.imgReplace, onchange: e => { r.imgReplace = e.target.checked; } }), 'Quand l’image est affichée, elle remplace le texte de l’indice'),
+      h('div', { class: 'ac' }, h('button', { class: 'btn sm', onclick: pick }, 'Changer l’image'), h('button', { class: 'btn sm bad', onclick: () => { delete r.img; delete r.imgReplace; delete r.imgOn; build(); } }, 'Retirer l’image')));
+  };
   function build() {
     list.innerHTML = '';
     rows.forEach((r, i) => {
       const ta = h('textarea', { oninput: e => { r.text = e.target.value; r.hl = []; } }); ta.value = r.text;
       list.append(h('div', { class: 'edcl' }, h('div', { class: 'hd' }, h('span', { class: 'd', style: 'background:' + r.color }), `Indice ${i + 1}`),
-        ta, h('div', { class: 'ac' },
+        ta, imgRow(r), h('div', { class: 'ac' },
           i > 0 ? h('button', { class: 'btn sm', onclick: () => { rows[i - 1].text = (rows[i - 1].text + ' ' + r.text).trim(); rows[i - 1].hl = []; rows[i - 1].note = ((rows[i - 1].note || '') + ' ' + (r.note || '')).trim(); rows.splice(i, 1); build(); } }, '⤴ Fusionner avec le précédent') : null,
           h('button', { class: 'btn sm', onclick: () => { const p = ta.selectionStart; if (!p || p >= r.text.length) return toast('Placez le curseur dans le texte à l’endroit à scinder'); const a = r.text.slice(0, p).trim(), c = r.text.slice(p).trim(); r.text = a; r.hl = []; rows.splice(i + 1, 0, { id: uid(), text: c, color: PALETTE[rows.length % PALETTE.length], hl: [] }); build(); } }, '✂ Scinder au curseur'),
           h('button', { class: 'btn sm bad', onclick: () => { rows.splice(i, 1); build(); } }, 'Supprimer'))));
@@ -867,20 +975,45 @@ function editClues(texts, fresh, after) {
     [{ label: 'Annuler', value: 0 }, { label: 'Enregistrer', cls: 'pri', value: 1, fn: () => { const clean = rows.filter(r => r.text.trim()); if (!clean.length) { toast('Aucun indice'); return false; } b.clues = clean.map(r => ({ ...r, text: r.text.trim() })); if (b.status === 'new') b.status = 'doing'; b.clueIdx = clamp(b.clueIdx, 0, b.clues.length - 1); if (fresh) b.clueIdx = 0; setClue(b.clueIdx, true); V.redrawAll(); doSave(); toast(`${b.clues.length} indices enregistrés ✓`); if (after) setTimeout(after, 60); } }], { full: true });
 }
 
+
+/* ---------------------------------------------------------------- fiches à barrer (carrés avec visages) */
+async function askCards() {
+  const b = S.cur; if (!b || b.cardAsked || b.crossSize) return;
+  const r = await ask('Fiches à barrer ?', h('div', {}, h('p', { style: 'margin:0 0 8px' }, 'Cette enquête a-t-elle des pages de fiches (carrés avec visage, nom, infos…) que vous voulez barrer d’un seul tap ?'), h('p', { style: 'margin:0;font-size:13px;color:var(--mut)' }, 'Il suffit de montrer une fiche à l’app : ensuite, un tap dans une fiche la barre en entier. Réglable plus tard dans Menu ≡ > « Fiches à barrer ».')),
+    [{ label: 'Non', value: 'no' }, { label: 'Plus tard', value: 'later' }, { label: 'Oui, régler', cls: 'pri', value: 'yes' }]);
+  if (r === 'yes') { await openCardSetup(); return; }
+  if (r === 'no' || r === 'later') { b.cardAsked = true; doSave(true); }
+}
+async function openCardSetup() {
+  const b = S.cur, N = S.doc.numPages; if (!b) return; let page = clamp(V.curPage || 0, 0, N - 1);
+  const step = async (n, rect, extra) => pickImageRegion(page, { raw: true, rect, title: `Fiches à barrer – ${n}/3`, ...extra });
+  const r1 = await step(1, { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, { intro: 'Placez le cadre rouge sur UNE fiche entière : du haut du visage jusqu’à la dernière ligne d’infos, sans dépasser. Coins = taille, intérieur = déplacer.', info: 'Allez à une page de fiches, puis encadrez une fiche.', ok: 'Suivant', cancel: 'Annuler' });
+  if (!r1) return; page = r1.pg;
+  const R = r1.ratio, a = r1.rect, c0 = { x: a.x, y: a.y * R, w: a.w, h: a.h * R };
+  const r2 = await step(2, { x: Math.min(a.x + a.w * 1.04, 1 - a.w), y: a.y, w: a.w, h: a.h }, { intro: 'Placez maintenant le cadre sur la fiche juste À DROITE de la première (même ligne). Cela permet à l’app de retrouver chaque fiche.', info: 'Si votre page n’a qu’une colonne, touchez « Passer ».', ok: 'Suivant', cancel: 'Passer' });
+  let px = null, py = null; if (r2 && r2.pg === page) px = r2.rect.x - a.x;
+  const r3 = await step(3, { x: a.x, y: Math.min(a.y + a.h * 1.04, 1 - a.h), w: a.w, h: a.h }, { intro: 'Dernière étape : le cadre sur la fiche juste EN DESSOUS de la première (même colonne).', info: 'Si votre page n’a qu’une ligne, touchez « Passer ».', ok: 'Terminer', cancel: 'Passer' });
+  if (r3 && r3.pg === page) py = (r3.rect.y - a.y) * R;
+  b.crossSize = { w: c0.w, h: c0.h }; b.cardGrid = { x: c0.x, y: c0.y, w: c0.w, h: c0.h, px: px && Math.abs(px) > c0.w * 0.5 ? px : null, py: py && Math.abs(py) > c0.h * 0.5 ? py : null, page };
+  b.cardAsked = true; await doSave(true);
+  if (S.tool !== 'cross') { S.tool = 'cross'; updateToolUI(); }
+  toast('Taille enregistrée ✓ Choisissez l’outil « Barrer » : un tap dans une fiche la barre.', 4500);
+}
+
 /* ---------------------------------------------------------------- lien officiel (QR code ou texte) */
 async function openLinkSetup(opts = {}) {
   const b = S.cur, doc = S.doc, N = doc.numPages, wiz = !!opts.wizard; let pg = Math.min(1, N - 1), token = 0;
-  const url = h('input', { type: 'url', placeholder: 'https://…', value: b.linkDone ? (b.officialUrl || '') : '', style: 'font-size:16px' });
+  const url = h('input', { type: 'text', inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', placeholder: 'lecoupablenestpaslea.fr/… ou https://…', value: b.linkDone ? (b.officialUrl || '') : '', style: 'font-size:16px' });
   const info = h('div', { style: 'font-size:14px;color:var(--mut);margin:8px 0;min-height:1.4em;text-align:center' });
   const cands = h('div', {}); const box = h('div', { style: 'text-align:center;margin:8px 0' }); const pnum = h('b');
-  const clean = u => { u = (u || '').trim().replace(/[.,;:)\]]+$/, ''); if (/^www\./i.test(u)) u = 'https://' + u; return u; };
+  const clean = u => { u = (u || '').trim().replace(/[.,;:)\]]+$/, ''); if (/^www\./i.test(u) || /^(?!https?:)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/|$)/i.test(u)) u = 'https://' + u; return u; };
   const isSite = u => /lecoupablenestpaslea/i.test(u);
   const found = new Map(); /* url -> { qr:boolean, pages:Set, how:Set } */
   const add = (u, how, i) => { u = clean(u); if (!/^https?:\/\/\S+\.\S+/i.test(u)) return; const e = found.get(u) || { qr: false, pages: new Set(), how: new Set() }; if (how === 'QR code') e.qr = true; e.pages.add(i); e.how.add(how); found.set(u, e); };
   async function scanPage(i) {
     const p = await doc.getPage(i + 1);
     try { (await p.getAnnotations()).forEach(x => x.url && add(x.url, 'lien cliquable', i)); } catch (e) { }
-    try { const tc = await p.getTextContent(); const m = tc.items.map(x => x.str).join(' ').match(/(https?:\/\/|www\.)[^\s"<>]+/gi); (m || []).forEach(u => add(u, 'texte', i)); } catch (e) { }
+    try { const tc = await p.getTextContent(); const RX = /(https?:\/\/|www\.|(?<![\w.@-])lecoupablenestpaslea\.[a-z]{2,})[^\s"<>]*/gi; const T = tc.items.map(x => x.str); let m = T.join(' ').match(RX) || []; const m2 = T.join('').match(RX) || []; m2.forEach(u => { if (!m.some(v => u.startsWith(v.replace(/\s/g, '')))) m.push(u); }); m.forEach(u => add(u, 'texte', i)); } catch (e) { }
     try {
       if (typeof jsQR === 'function') {
         const base = p.getViewport({ scale: 1 }); const c = await renderThumb(doc, i + 1, Math.round(Math.min(2200, base.width * 3)));
@@ -920,8 +1053,8 @@ async function openLinkSetup(opts = {}) {
     h('div', { style: 'display:flex;align-items:center;justify-content:center;gap:12px;margin:10px 0 0' }, h('button', { class: 'btn sm', onclick: () => go(-1) }, '◀'), h('span', {}, 'Page ', pnum), h('button', { class: 'btn sm', onclick: () => go(1) }, '▶'),
       h('button', { class: 'btn sm', onclick: async () => { info.textContent = 'Recherche sur cette page…'; const n0 = found.size; await scanPage(pg); renderCands(); info.textContent = found.size > n0 ? 'Lien(s) ajouté(s) à la liste.' : 'Rien de nouveau sur cette page.'; } }, 'Chercher')),
     box, info, cands, h('div', { style: 'margin-top:8px;font-size:13px;color:var(--mut)' }, 'Lien retenu :'), url);
-  const ok = { label: 'Valider le lien', cls: 'pri', value: 1, fn: async () => { const u = clean(url.value); if (!/^https?:\/\/\S+\.\S+/.test(u)) { toast('Collez un lien valide (https://…)'); return false; } b.officialUrl = u; b.linkDone = true; await doSave(); toast('Lien enregistré ✓'); } };
-  const left = wiz ? { label: 'Passer', value: 0, fn: async () => { if (!await confirmBox('Passer cette étape ?', 'Vous ne pourrez pas ouvrir le site officiel pour valider le suspect tant que le lien n’est pas défini (menu ≡ → Lien officiel).', 'Passer', 'bad')) return false; b.linkDone = true; doSave(true); } } : { label: 'Annuler', value: 0 };
+  const ok = { label: 'Valider le lien', cls: 'pri', value: 1, fn: async () => { const u = clean(url.value); if (!/^https?:\/\/\S+\.\S+/.test(u)) { toast('Collez un lien valide (ex. lecoupablenestpaslea.fr/…)'); return false; } b.officialUrl = u; b.linkDone = true; await doSave(); toast('Lien enregistré ✓'); if (wiz) setTimeout(askCards, 300); } };
+  const left = wiz ? { label: 'Passer', value: 0, fn: async () => { if (!await confirmBox('Passer cette étape ?', 'Vous ne pourrez pas ouvrir le site officiel pour valider le suspect tant que le lien n’est pas défini (menu ≡ → Lien officiel).', 'Passer', 'bad')) return false; b.linkDone = true; doSave(true); setTimeout(askCards, 300); } } : { label: 'Annuler', value: 0 };
   openModal(wiz ? 'Étape 2/2 – Lien officiel' : 'Lien officiel', body, [left, ok], { full: true, noclose: wiz, onclose: () => token++ });
   load(); scanAll();
 }
@@ -954,6 +1087,13 @@ function openSettings() {
         h('div', { class: 'line' }, h('div', {}, 'Méthode d’export', h('small', {}, 'Téléchargement : un seul tap, fichier dans « Téléchargements ». Partage : choisir Drive, etc.')), h('select', { onchange: e => { st.exportMode = e.target.value; saveSettings(); } }, [['download', 'Téléchargement direct'], ['share', 'Partager…']].map(([v, l]) => h('option', { value: v, selected: st.exportMode === v }, l)))),
         hasDirPicker() ? h('div', { class: 'line' }, h('div', {}, 'Dossier d’export', h('small', { id: 'dirn' }, '…')), h('button', { class: 'btn sm', onclick: async () => { if (await pickExportDir()) render(); } }, 'Choisir')) : null,
         h('div', { id: 'snaps' }),
+        h('div', { class: 'line' }, h('div', {}, 'Boîte de sécurité', h('small', {}, 'Copies automatiques gardées dans l’app : chaque jour et avant chaque mise à jour'))),
+        h('div', { id: 'boxl' }),
+        toggle('Rappel d’export avant une mise à jour annoncée', '10 minutes avant l’heure annoncée', st.remind !== false, v => { st.remind = v; saveSettings(); }),
+        toggle('Afficher les enquêtes en attente de leur PDF', 'Tuiles grises à la fin de l’accueil (venant d’une sauvegarde importée)', st.showPend !== false, v => { st.showPend = v; saveSettings(); renderHome(); }),
+        (st.hidePend || []).length ? h('div', { class: 'line' }, h('div', {}, (st.hidePend || []).length + ' tuile(s) masquée(s)'), h('button', { class: 'btn sm', onclick: () => { st.hidePend = []; saveSettings(); renderHome(); render(); } }, 'Réafficher')) : null,
+        h('div', { class: 'line' }, h('div', {}, 'Mise à jour', h('small', {}, 'Version installée : v' + APP_VER + '. Vos données ne sont jamais touchées.')), h('div', { style: 'display:flex;gap:6px' }, h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(checkUpdateNow, 60); } }, 'Rechercher'), h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(repairApp, 60); } }, 'Réparer'))),
+        h('div', { class: 'line' }, h('div', {}, 'Assistant de restauration', h('small', {}, 'Retrouver ses enquêtes : choisir les PDF puis le fichier de sauvegarde')), h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(startRestoreWizard, 60); } }, 'Lancer')),
         h('div', { class: 'line', id: 'persist' }, h('div', {}, 'Stockage protégé', h('small', { id: 'pst' }, '…')), h('button', { class: 'btn sm', onclick: askPersist }, 'Demander')),
         h('div', { class: 'note' }, 'Les données sont stockées dans le navigateur de cet appareil. Installez l’app sur l’écran d’accueil et faites une copie de secours de temps en temps.')),
       h('div', { class: 'sec' }, h('h3', {}, 'Forme du barrement'),
@@ -963,16 +1103,12 @@ function openSettings() {
       h('div', { class: 'sec' }, h('h3', {}, 'Surlignage'),
         h('div', { class: 'line' }, h('div', {}, 'Opacité'), h('input', { type: 'range', min: 0.2, max: 0.9, step: 0.05, value: st.hlOp, onchange: e => { st.hlOp = parseFloat(e.target.value); saveSettings(); V.redrawAll(); } })),
         h('div', { class: 'line' }, h('div', {}, 'Séparation des mots', h('small', {}, 'Plus haut = regroupe davantage (prénoms composés)')), h('input', { type: 'range', min: 0.5, max: 2.5, step: 0.1, value: st.sens, onchange: e => { st.sens = parseFloat(e.target.value); saveSettings(); } }))),
-      h('div', { class: 'sec' }, h('h3', {}, 'Interface (barre du lecteur)'),
-        toggle('Bouton Pinceau', '', !st.hide.brush, v => { st.hide.brush = !v; applyHide(); saveSettings(); }),
-        toggle('Bouton Gomme', '', !st.hide.erase, v => { st.hide.erase = !v; applyHide(); saveSettings(); }),
-        toggle('Bouton Annuler', '', !st.hide.undo, v => { st.hide.undo = !v; applyHide(); saveSettings(); }),
-        toggle('Icône d’enregistrement', '', !st.hide.save, v => { st.hide.save = !v; applyHide(); saveSettings(); }),
-        h('div', { class: 'line' }, h('div', {}, 'Réinitialiser l’interface'), h('button', { class: 'btn sm', onclick: () => { st.hide = { ...DEF.hide }; applyHide(); saveSettings(); render(); } }, 'Réinitialiser'))),
-      h('div', { class: 'sec' }, h('h3', {}, 'Aide'), h('div', { class: 'line' }, h('div', {}, 'Tutoriel', h('small', {}, S.cur ? 'Visite guidée du lecteur' : 'Visite guidée de l’accueil')), h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(() => startTuto(S.cur ? 'reader' : 'home'), 200); } }, 'Revoir'))),
+      h('div', { class: 'sec' }, h('h3', {}, 'Interface du lecteur'),
+        h('div', { class: 'line' }, h('div', {}, 'Personnaliser l’interface', h('small', {}, 'Ordre des blocs, taille de l’indice, outils à afficher ou retirer')), h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(openUiPanel, 60); } }, 'Ouvrir'))),
+      h('div', { class: 'sec' }, h('h3', {}, 'Aide'), h('div', { class: 'line' }, h('div', {}, 'Nouveautés', h('small', {}, 'Version ' + APP_VER)), h('button', { class: 'btn sm', onclick: () => maybeShowNews(true) }, 'Voir')), h('div', { class: 'line' }, h('div', {}, 'Tutoriel', h('small', {}, S.cur ? 'Visite guidée du lecteur' : 'Visite guidée de l’accueil')), h('button', { class: 'btn sm', onclick: () => { sm && sm.close(); setTimeout(() => startTuto(S.cur ? 'reader' : 'home'), 200); } }, 'Revoir'))),
       h('div', { class: 'sec' }, h('button', { class: 'btn bad', style: 'width:100%', onclick: async () => { if (await confirmBox('Réinitialiser les paramètres ?', 'Tous les paramètres reviennent à leurs valeurs par défaut. Vos enquêtes ne sont pas touchées.', 'Réinitialiser', 'bad')) { S.settings = structuredClone(DEF); applyHide(); saveSettings(); V.redrawAll(); render(); } } }, 'Tout réinitialiser aux valeurs par défaut')),
       h('p', { style: 'font-size:12px;color:var(--mut);text-align:center' }, 'Cette application ne contacte aucun serveur : vos PDF et vos annotations ne quittent jamais votre appareil.'));
-    updPersist(); updSnaps(); updDir();
+    updPersist(); updSnaps(); updDir(); fillBox();
   }
   async function updDir() { const e = $('#dirn'); if (!e) return; try { const dh = await dbGet('kv', 'dirHandle'); e.textContent = dh ? dh.name + ' (les fichiers n°1 et n°2 y sont remplacés)' : 'Non choisi'; } catch (_) { e.textContent = 'Non choisi'; } }
   async function updSnaps() {
@@ -996,7 +1132,7 @@ function drawShape(done) {
 }
 
 /* ---------------------------------------------------------------- export / import */
-function bookState(b) { const { id, title, status, culprit, officialUrl, notes, pinNote, disabled, linkDone, clues, clueIdx, cluePage, clueRect, ann, crossSize, crossTh, pos, attempts } = b; return { id, title, status, culprit, officialUrl, notes, pinNote, disabled, linkDone, clues, clueIdx, cluePage, clueRect, ann, crossSize, crossTh, pos, attempts }; }
+function bookState(b) { const { id, title, status, culprit, officialUrl, notes, pinNote, disabled, linkDone, clues, clueIdx, cluePage, clueRect, ann, crossSize, crossTh, pos, attempts, cardGrid, cardAsked } = b; return { id, title, status, culprit, officialUrl, notes, pinNote, disabled, linkDone, clues, clueIdx, cluePage, clueRect, ann, crossSize, crossTh, pos, attempts, cardGrid, cardAsked }; }
 const hasDirPicker = () => 'showDirectoryPicker' in window;
 async function getDirHandle(ask) {
   if (!hasDirPicker()) return null;
@@ -1020,7 +1156,7 @@ async function exportData() {
     if (!ok) { const a = h('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); ok = true; where = 'dans « Téléchargements » : ' + name; }
   }
   if (ok) {
-    meta.last = Date.now(); meta.slot = slot; try { await dbPut('kv', meta, 'backupMeta'); await dbPut('kv', { at: meta.last, json }, 'snap' + slot); } catch (e) { console.error(e); }
+    meta.last = Date.now(); meta.slot = slot; S.bk = meta; try { await dbPut('kv', meta, 'backupMeta'); await dbPut('kv', { at: meta.last, json }, 'snap' + slot); } catch (e) { console.error(e); }
     toast('Sauvegarde n°' + slot + ' enregistrée ' + where, 4500);
   }
   return ok;
@@ -1032,22 +1168,306 @@ function backupPrompt(reason) {
      { label: 'Sauvegarder maintenant', cls: 'pri', value: 1, fn: async () => { const ok = await exportData(); if (!ok) return false; } }]).promise;
 }
 async function checkBackupReminder() {
-  const d = S.settings.backupDays; if (!d || !S.books.length) return;
+  const d = S.settings.backupDays; if (!d || !S.books.length || document.querySelector('.modal')) return;
   const m = (await dbGet('kv', 'backupMeta')) || {}; if (!m.since) { m.since = Date.now(); await dbPut('kv', m, 'backupMeta'); }
   if (Date.now() - Math.max(m.last || 0, m.since, m.snooze || 0) < d * 864e5) return;
   backupPrompt('launch');
 }
 async function applyBackup(d, ask = true) {
   if (!d || d.format !== 'enquetes-backup' || !Array.isArray(d.books)) throw 0;
-  if (ask && !await confirmBox('Importer la sauvegarde ?', `${d.books.length} enquête(s). Pour celles déjà présentes, la progression actuelle sera remplacée. Les autres seront appliquées quand vous rechargerez le même PDF.`, 'Importer')) return;
+  if (ask && !await confirmBox('Importer la sauvegarde ?', `${d.books.length} enquête(s). Pour celles déjà présentes, la progression actuelle sera remplacée. Les autres seront appliquées quand vous rechargerez le même PDF.`, 'Importer')) return false;
   for (const st of d.books) {
     const b = S.books.find(x => x.id === st.id);
     if (b) { Object.assign(b, st); normNotes(b); await dbPut('books', JSON.parse(JSON.stringify(b))); } else await dbPut('pending', st, st.id);
   }
   if (d.settings) { S.settings = Object.assign(structuredClone(DEF), d.settings); applyHide(); saveSettings(); }
-  toast('Sauvegarde importée ✓'); if (S.cur) { const id = S.cur.id; S.cur = S.books.find(x => x.id === id); setClue(S.cur.clueIdx, true); V.redrawAll(); } renderHome();
+  toast('Sauvegarde importée ✓'); if (S.cur) { const id = S.cur.id; S.cur = S.books.find(x => x.id === id); setClue(S.cur.clueIdx, true); V.redrawAll(); } await refreshPend(); renderHome();
+  const miss = d.books.filter(st => !S.books.find(b => b.id === st.id)); if (miss.length) setTimeout(() => offerMissing(miss), 150); return true;
 }
-async function importData(file) { try { await applyBackup(JSON.parse(await file.text())); } catch (e) { console.error(e); toast('Fichier de sauvegarde invalide'); } }
+async function importData(file) { let d; try { d = JSON.parse(await file.text()); } catch (e) { toast('Ce fichier n’est pas une sauvegarde (« ' + (file.name || '?') + ' » illisible)'); return false; } try { return (await applyBackup(d, !S.wiz)) !== false; } catch (e) { console.error(e); toast('Ce fichier JSON n’est pas une sauvegarde de l’app Enquêtes'); return false; } }
+
+
+
+/* ---------------------------------------------------------------- personnalisation de l'interface */
+const UI_BLOCKS = { clue: ['Indice', 'Le bandeau avec le texte de l’indice'], vp: ['Pages', 'La zone où on lit et on annote'], tools: ['Outils', 'Surligner, couleur, barrer, gomme…'], nav: ['Navigation', 'Flèches de page, enregistrer, menu'] };
+function openUiPanel() {
+  const st = S.settings; const body = h('div', {});
+  const save = full => { full ? applyHide() : applyUI(); saveSettings(); };
+  const seg = (cur, opts, fn) => h('div', { class: 'shapes' }, opts.map(([v, l]) => h('button', { class: cur === v ? 'on' : '', onclick: () => { fn(v); save(); draw(); } }, l)));
+  const tog = (label, sub, val, fn, full) => h('div', { class: 'line' }, h('div', {}, label, sub ? h('small', {}, sub) : null), h('label', { class: 'sw2' }, h('input', { type: 'checkbox', checked: !!val, onchange: e => { fn(e.target.checked); save(full); } }), h('i')));
+  const draw = () => {
+    body.innerHTML = ''; const u = normUI();
+    const move = (i, d) => { const j = i + d; if (j < 0 || j > 3) return; [u.order[i], u.order[j]] = [u.order[j], u.order[i]]; save(); draw(); };
+    const pct = h('b', {}, Math.round(u.scale * 100) + ' %');
+    body.append(
+      h('h4', { class: 'nsec' }, 'Ordre des blocs, de haut en bas'),
+      h('div', { class: 'hint' }, 'Touchez ▲ ▼ pour déplacer un bloc. Les changements sont enregistrés tout de suite : fermez cette fenêtre pour voir le résultat.'),
+      ...u.order.map((k, i) => h('div', { class: 'line' }, h('div', {}, (i + 1) + '. ' + UI_BLOCKS[k][0], h('small', {}, UI_BLOCKS[k][1])),
+        h('div', { style: 'display:flex;gap:6px' },
+          h('button', { class: 'btn sm', 'aria-label': 'Monter', disabled: i === 0, onclick: () => move(i, -1) }, ic('up', 16)),
+          h('button', { class: 'btn sm', 'aria-label': 'Descendre', disabled: i === 3, onclick: () => move(i, 1) }, ic('down', 16))))),
+      h('h4', { class: 'nsec' }, 'Indice'),
+      h('div', { class: 'line' }, h('div', {}, 'Taille du texte', h('small', {}, 'Tout l’indice et sa note')), pct),
+      h('input', { type: 'range', min: 0.8, max: 1.6, step: 0.1, value: u.scale, style: 'width:100%', oninput: e => { u.scale = parseFloat(e.target.value); pct.textContent = Math.round(u.scale * 100) + ' %'; applyUI(); }, onchange: () => save() }),
+      h('div', { class: 'line' }, h('div', {}, 'Hauteur maximale du bandeau', h('small', {}, 'Au-delà, le texte défile'))),
+      seg(u.cmh, [[70, 'Compacte'], [112, 'Normale'], [170, 'Grande'], [240, 'Très grande']], v => { u.cmh = v; }),
+      h('div', { class: 'line' }, h('div', {}, 'Liste et flèches d’indice')),
+      seg(u.ctlLeft ? 'l' : 'r', [['l', 'À gauche'], ['r', 'À droite']], v => { u.ctlLeft = v === 'l'; }),
+      h('div', { class: 'line' }, h('div', {}, 'Colonne notes / pages masquées')),
+      seg(u.sideRight ? 'r' : 'l', [['l', 'À gauche'], ['r', 'À droite']], v => { u.sideRight = v === 'r'; }),
+      h('h4', { class: 'nsec' }, 'Outils et fonctionnalités'),
+      h('div', { class: 'hint' }, 'Désactivez ce que vous n’utilisez pas : l’interface se réorganise et gagne de la place. Rien n’est supprimé, vous pouvez tout réactiver.'),
+      ...HIDE_ITEMS.map(([k, l, sub]) => tog(l, sub, !st.hide[k], v => { st.hide[k] = !v; }, true)),
+      h('div', { class: 'line' }, h('div', {}, 'Tout réactiver'), h('button', { class: 'btn sm', onclick: () => { st.hide = { ...DEF.hide }; save(true); draw(); } }, 'Réactiver')),
+      h('h4', { class: 'nsec' }, 'Affichage'),
+      tog('Affichage compact', 'Boutons sans texte, bandeau plus serré', u.compact, v => { u.compact = v; }));
+  };
+  draw();
+  const m = openModal('Personnaliser l’interface', body, [{ label: 'Tout remettre', value: 0, fn: () => { st.ui = structuredClone(DEF.ui); save(); draw(); return false; } }, { label: 'Fermer', cls: 'pri', value: 1 }], { full: true });
+}
+
+/* ---------------------------------------------------------------- boîte de sécurité (copies automatiques) */
+const boxDB = () => new Promise((res, rej) => { const r = indexedDB.open('enquetes-box', 1); r.onupgradeneeded = () => r.result.createObjectStore('snaps', { keyPath: 'at' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const boxTx = (mode, fn) => boxDB().then(d => new Promise((res, rej) => { const t = d.transaction('snaps', mode), rq = fn(t.objectStore('snaps')); t.oncomplete = () => { d.close(); res(rq && rq.result); }; t.onerror = t.onabort = () => { d.close(); rej(t.error); }; }));
+const boxList = async () => ((await boxTx('readonly', st => st.getAll())) || []).sort((x, y) => y.at - x.at);
+async function boxSnapshot(reason) {
+  const books = await dbAll('books'), pend = await dbAll('pending'); if (!books.length && !pend.length) return null;
+  const data = { format: 'enquetes-backup', v: 1, at: new Date().toISOString(), settings: S.settings, books: [...books.map(bookState), ...pend] };
+  const snap = { at: Date.now(), reason, ver: APP_VER, n: books.length, json: JSON.stringify(data) };
+  await boxTx('readwrite', st => st.put(snap));
+  const all = await boxList(); for (const s of all.slice(6)) await boxTx('readwrite', st => st.delete(s.at));
+  return snap;
+}
+async function boxAuto() {
+  try {
+    const lv = await dbGet('kv', 'lastVer');
+    if (lv !== APP_VER) { if (S.books.length) await boxSnapshot(lv ? `avant la mise à jour v${lv} → v${APP_VER}` : `avant la mise à jour v${APP_VER}`); await dbPut('kv', APP_VER, 'lastVer'); }
+    else if (S.books.length) { const l = await boxList(); if (!l[0] || Date.now() - l[0].at > 864e5) await boxSnapshot('copie automatique'); }
+  } catch (e) { console.error(e); }
+}
+async function fillBox() {
+  const el = $('#boxl'); if (!el) return; let list = []; try { list = await boxList(); } catch (e) { }
+  el.innerHTML = ''; if (!list.length) { el.append(h('div', { class: 'note' }, 'Aucune copie automatique pour le moment.')); return; }
+  list.forEach(s => el.append(h('div', { class: 'line' }, h('div', {}, new Date(s.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), h('small', {}, `${s.reason} · ${s.n} enquête${s.n > 1 ? 's' : ''}`)),
+    h('button', { class: 'btn sm', onclick: async () => { try { await applyBackup(JSON.parse(s.json)); } catch (e) { console.error(e); toast('Copie illisible'); } } }, 'Restaurer'))));
+}
+
+/* ---------------------------------------------------------------- rappels, annonces et mises à jour */
+let lastChk = 0;
+async function homeChecks(force) {
+  if (!force && Date.now() - lastChk < 3 * 3600e3) return;
+  if (S.cur || document.querySelector('.modal')) return;
+  lastChk = Date.now(); try { S.reg && S.reg.update().catch(() => { }); } catch (e) { }
+  await annTick(true); await checkBackupReminder();
+}
+async function fetchAnn() { try { const r = await fetch('annonce.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return null; const j = await r.json(); return j && j.version ? j : null; } catch (e) { return null; } }
+async function annTick(refetch) {
+  if (refetch || !S.annAt || Date.now() - S.annAt > 5 * 60e3) { const had = JSON.stringify(S.ann || null); S.ann = await fetchAnn(); S.annAt = Date.now(); if (!S.cur && had !== JSON.stringify(S.ann || null) && !document.querySelector('.modal')) renderHome(); }
+  const a = S.ann; if (!a || !(+a.version > +APP_VER) || document.querySelector('.modal')) return;
+  const at = new Date(a.date).getTime(); if (!at || isNaN(at)) return;
+  const mins = (at - Date.now()) / 60000, before = +a.avant || 30, rem = +a.rappel || 10, key = a.version + '|' + a.date, inWin = mins > -10;
+  const shown = (await dbGet('kv', 'annShown')) || {}; const mark = async k => { shown[key + k] = Date.now(); await dbPut('kv', shown, 'annShown'); };
+  const hhmm = new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const ask = (title, text) => openModal(title, h('div', {}, h('p', { style: 'margin:0 0 8px' }, text), a.message ? h('p', { class: 'hint' }, a.message) : null), [{ label: 'Plus tard', value: 0 }, { label: 'Sauvegarder maintenant', cls: 'pri', value: 1, fn: () => exportData() }]);
+  if (S.settings.remind !== false && inWin && mins <= rem && !shown[key + 'b']) { await mark('b'); await mark('a'); ask('Sauvegarde avant la mise à jour', `La mise à jour est prévue à ${hhmm}${mins > 1 ? ' (dans ' + Math.round(mins) + ' min)' : ''}. Faites un export de sécurité maintenant : c’est rapide.`); return; }
+  if (inWin && mins <= before && !shown[key + 'a']) { await mark('a'); ask('Mise à jour bientôt', `Une mise à jour est prévue à ${hhmm}. Pensez à faire une sauvegarde avant, par sécurité.`); }
+}
+function registerSW() {
+  if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => { S.reg = reg; }).catch(() => { });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!had || S.applyingUpdate) return; S.updateReady = true; if (!S.cur) renderHome(); else toast('Nouvelle version prête : touchez « Redémarrer » sur l’accueil', 5000); });
+}
+
+async function swVersion() {
+  try { const r = await fetch('sw.js?t=' + Date.now(), { cache: 'no-store' }); const m = (await r.text()).match(/enquetes-v(\d+)/); return m ? +m[1] : null; } catch (e) { return null; }
+}
+async function checkUpdateNow() {
+  if (!navigator.onLine) { toast('Pas de connexion internet', 2500); return; }
+  toast('Recherche en cours…', 4000);
+  const v = await swVersion();
+  if (v == null) { toast('Impossible de joindre le serveur', 3000); return; }
+  if (v <= +APP_VER) { toast('Vous avez la dernière version (v' + APP_VER + ') ✓', 3000); return; }
+  if (S.reg) { try { await S.reg.update(); } catch (e) { } }
+  const ok = await confirmBox('Nouvelle version disponible', 'La version ' + v + ' est disponible (vous avez la ' + APP_VER + '). Une copie de sécurité est faite avant. Installer maintenant ?', 'Installer');
+  if (ok) applyUpdate();
+}
+async function repairApp() {
+  const ok = await confirmBox('Réparer l’app ?', 'L’app va se recharger depuis internet (utile si quelque chose semble bloqué ou pas à jour). Vos enquêtes, notes, surlignages et sauvegardes ne sont PAS touchés. Une copie de sécurité est faite avant.', 'Réparer');
+  if (!ok) return;
+  try { await boxSnapshot('avant réparation'); } catch (e) { console.error(e); }
+  if (S.cur) await doSave(true);
+  S.applyingUpdate = true;
+  try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) { }
+  try { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } catch (e) { }
+  location.reload();
+}
+async function applyUpdate() {
+  try { await boxSnapshot('avant la mise à jour'); } catch (e) { console.error(e); }
+  if (S.cur) await doSave(true);
+  S.applyingUpdate = true; location.reload();
+}
+function homeBanners() {
+  const out = [];
+  if (S.updateReady) out.push(h('div', { class: 'hbanner ok' }, h('div', {}, h('b', {}, '✅ Nouvelle version prête'), h('small', {}, 'Une copie de sécurité est faite avant de redémarrer.')), h('button', { class: 'btn sm pri', onclick: applyUpdate }, 'Redémarrer')));
+  const a = S.ann; if (a && +a.version > +APP_VER) {
+    const at = new Date(a.date), ok = !isNaN(at.getTime()), fut = ok && at.getTime() > Date.now();
+    const when = ok ? at.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+    out.push(h('div', { class: 'hbanner' }, h('div', {}, h('b', {}, fut ? '🛠️ Mise à jour prévue' : '🛠️ Mise à jour disponible'), h('small', {}, (fut ? when : 'Fermez complètement puis rouvrez l’app pour l’installer') + (a.message ? ' · ' + a.message : ''))), h('button', { class: 'btn sm', onclick: () => exportData().then(() => renderHome()) }, 'Sauvegarder')));
+  }
+  const d = S.settings.backupDays;
+  if (d && S.books.length && S.bk) { const ref = Math.max(S.bk.last || 0, S.bk.since || 0), days = ref ? Math.floor((Date.now() - ref) / 864e5) : 0;
+    if (ref && days >= d) out.push(h('div', { class: 'hbanner warn' }, h('div', {}, h('b', {}, '💾 Pensez à sauvegarder'), h('small', {}, S.bk.last ? `Dernière sauvegarde : il y a ${days} jour${days > 1 ? 's' : ''}` : `Aucune sauvegarde depuis ${days} jours`)), h('button', { class: 'btn sm pri', onclick: () => exportData().then(() => renderHome()) }, 'Sauvegarder'))); }
+  return out;
+}
+
+/* ---------------------------------------------------------------- enquêtes en attente de leur PDF + assistant de restauration */
+async function refreshPend() { try { S.pend = await dbAll('pending'); } catch (e) { S.pend = []; } }
+function pendTiles() {
+  const st = S.settings; if (st.showPend === false) return [];
+  return (S.pend || []).filter(p => !(st.hidePend || []).includes(p.id) && !S.books.find(b => b.id === p.id)).map(p => h('div', { class: 'tile pend', onclick: () => pendAsk(p) },
+    h('div', { class: 'pn' }, h('span', { class: 'pe' }, '📄'), h('b', {}, p.title || 'Enquête'), h('small', {}, 'PDF à rajouter')),
+    h('div', { class: 'more', onclick: e => { e.stopPropagation(); pendMenu(p); } }, ic('more', 18))));
+}
+function pendAsk(p) {
+  openModal(p.title || 'Enquête', h('p', { style: 'margin:0' }, 'Cette enquête est dans votre sauvegarde, mais son PDF n’est pas sur cet appareil. Choisissez-le pour retrouver votre progression.'),
+    [{ label: 'Plus tard', value: 0 }, { label: 'Choisir le PDF', cls: 'pri', value: 1, fn: () => { $('#file').click(); } }]);
+}
+function pendMenu(p) {
+  openModal(p.title || 'Enquête', h('p', { style: 'margin:0' }, 'Masquer cette tuile grise ? Votre sauvegarde et votre progression ne sont pas touchées. Vous pourrez la réafficher dans Paramètres > Sauvegarde.'),
+    [{ label: 'Annuler', value: 0 }, { label: 'Masquer', cls: 'pri', value: 1, fn: async () => { const st = S.settings; st.hidePend = [...(st.hidePend || []), p.id]; await saveSettings(); renderHome(); } }]);
+}
+function offerMissing(miss) {
+  const names = miss.map(m => '« ' + (m.title || 'Enquête') + ' »').join(', ');
+  openModal('Des PDF manquent', h('div', {}, h('p', { style: 'margin:0 0 8px' }, miss.length + ' enquête' + (miss.length > 1 ? 's' : '') + ' de la sauvegarde ' + (miss.length > 1 ? 'n’ont' : 'n’a') + ' pas encore leur PDF : ' + names + '.'), h('p', { class: 'hint' }, 'Voulez-vous les ajouter maintenant ? Sinon elles resteront en tuiles grises à la fin de l’accueil, que vous pourrez masquer.')),
+    [{ label: 'Plus tard', value: 0 }, { label: 'Choisir les PDF', cls: 'pri', value: 1, fn: () => { $('#file').click(); } }]);
+}
+function startRestoreWizard() {
+  S.wiz = { step: 1 };
+  S.wiz.m = openModal('Retrouver mes enquêtes', h('div', {}, h('p', { style: 'margin:0 0 8px' }, h('b', {}, 'Étape 1 sur 2. '), 'Choisissez les PDF de vos enquêtes (vous pouvez en sélectionner plusieurs d’un coup).'), h('p', { class: 'hint' }, 'Ce sont les mêmes PDF que ceux que vous aviez chargés dans l’ancienne version.')),
+    [{ label: 'Annuler', value: 0, fn: () => { S.wiz = null; } }, { label: 'Choisir les PDF', cls: 'pri', fn: () => { $('#file').click(); return false; } }], { noclose: true });
+}
+function wizStep2() {
+  S.wiz.m = openModal('Retrouver mes enquêtes', h('div', {}, h('p', { style: 'margin:0 0 8px' }, h('b', {}, 'Étape 2 sur 2. '), 'Choisissez maintenant votre fichier de sauvegarde (.json).'), h('p', { class: 'hint' }, 'C’est le fichier créé par « Copie de secours > Exporter » dans l’ancienne version.')),
+    [{ label: 'Passer', value: 0, fn: () => { S.wiz = null; } }, { label: 'Choisir la sauvegarde', cls: 'pri', fn: () => { $('#importfile').click(); return false; } }], { noclose: true });
+}
+function welcomeAsk() {
+  const done = restore => { S.settings.wizAsked = true; if (restore) S.settings.tutoHome = S.settings.tutoReader = true; saveSettings(); if (restore) setTimeout(startRestoreWizard, 60); else if (!S.settings.tutoHome) setTimeout(async () => { if (!S.cur) { await startTuto('home'); S.settings.tutoHome = true; saveSettings(); } }, 200); };
+  openModal('Bienvenue 🔎', h('p', { style: 'margin:0' }, 'Avez-vous déjà utilisé cette application avant (par exemple sur une ancienne adresse) et gardé un fichier de sauvegarde ?'),
+    [{ label: 'Non, première fois', value: 0, fn: () => done(false) }, { label: 'Oui, j’ai une sauvegarde', cls: 'pri', value: 1, fn: () => done(true) }], { noclose: true });
+}
+
+/* ---------------------------------------------------------------- export du PDF annoté */
+const loadJsPDF = () => window.jspdf ? Promise.resolve() : new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'jspdf.umd.min.js'; s.onload = res; s.onerror = () => rej(new Error('jspdf')); document.head.append(s); });
+async function deliverFile(blob, name) {
+  const f = new File([blob], name, { type: blob.type });
+  if (S.settings.exportMode === 'share' && navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: name }); return 'share'; } catch (e) { if (e && e.name === 'AbortError') return false; } }
+  const a = h('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); return 'download';
+}
+function openExportPdf() {
+  const b = S.cur; let scope = 'all', q = 'n'; const dis = b.disabled || [];
+  const count = s => s === 'all' ? b.numPages : s === 'ann' ? new Set(b.ann.map(x => x.page)).size : b.numPages - dis.length;
+  const body = h('div', {});
+  const draw = () => {
+    body.innerHTML = '';
+    body.append(h('p', { style: 'margin:0 0 10px' }, 'Crée un PDF où vos surlignages, croix et traits sont intégrés à chaque page, pratique pour le partager.'),
+      h('div', { class: 'line' }, h('b', {}, 'Pages à inclure')),
+      h('div', { class: 'shapes' }, [['all', 'Toutes'], ['ann', 'Annotées'], ['vis', 'Sans les masquées']].map(([k, l]) => h('button', { class: scope === k ? 'on' : '', onclick: () => { scope = k; draw(); } }, l, h('small', {}, count(k) + ' page' + (count(k) > 1 ? 's' : ''))))),
+      h('div', { class: 'line' }, h('b', {}, 'Qualité')),
+      h('div', { class: 'shapes' }, [['n', 'Normale', 'fichier plus léger'], ['h', 'Haute', 'plus lourd, plus long']].map(([k, l, s]) => h('button', { class: q === k ? 'on' : '', onclick: () => { q = k; draw(); } }, l, h('small', {}, s)))),
+      h('p', { class: 'hint' }, 'Les pages sont converties en images : le PDF n’a pas besoin d’Internet. Gardez l’application ouverte pendant l’export (quelques minutes pour une enquête complète).'));
+  };
+  draw();
+  openModal('Exporter le PDF annoté', body, [{ label: 'Annuler', value: 0 }, { label: 'Exporter', cls: 'pri', value: 1, fn: () => { setTimeout(() => runExportPdf(scope, q), 60); } }]);
+}
+async function runExportPdf(scope, q) {
+  const b = S.cur; await doSave(true);
+  const dis = b.disabled || []; let idxs = [...Array(b.numPages).keys()];
+  if (scope === 'ann') { const s = new Set(b.ann.map(x => x.page)); idxs = idxs.filter(i => s.has(i)); } else if (scope === 'vis') idxs = idxs.filter(i => !dis.includes(i));
+  if (!idxs.length) { toast('Aucune page à exporter avec ce choix'); return; }
+  try { await loadJsPDF(); } catch (e) { toast('Module d’export introuvable'); return; }
+  let stop = false; const txt = h('div', {}, 'Préparation…');
+  const fill = h('i', { style: 'display:block;height:100%;width:0;background:var(--accent);transition:width .2s' });
+  const pm = openModal('Export du PDF', h('div', {}, txt, h('div', { style: 'height:12px;border-radius:6px;background:#10121a;border:1px solid #343a4b;overflow:hidden;margin-top:10px' }, fill), h('p', { class: 'hint' }, 'Gardez l’application ouverte pendant l’export.')),
+    [{ label: 'Annuler', value: 0, fn: () => { stop = true; } }], { noclose: true });
+  const W = q === 'h' ? 1600 : 1100, Q = q === 'h' ? 0.86 : 0.78; let pdf = null;
+  try {
+    for (let k = 0; k < idxs.length && !stop; k++) {
+      const i = idxs[k]; txt.textContent = `Page ${i + 1} (${k + 1} / ${idxs.length})`; fill.style.width = (k / idxs.length * 100) + '%';
+      const pg = await S.doc.getPage(i + 1); const base = pg.getViewport({ scale: 1 }); const c = await renderThumb(S.doc, i + 1, W);
+      const ratio = base.height / base.width, ctx = c.getContext('2d'), m = V.annMarkup(i, false);
+      const lay = async (inner, blend) => {
+        if (!inner) return; const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 ${ratio}" width="${c.width}" height="${c.height}" preserveAspectRatio="none">${inner}</svg>`;
+        const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode();
+        ctx.globalCompositeOperation = blend; ctx.drawImage(img, 0, 0, c.width, c.height); ctx.globalCompositeOperation = 'source-over';
+      };
+      await lay(m.hl, 'multiply'); await lay(m.dr, 'source-over');
+      const w = base.width, hh = base.height, o = w > hh ? 'l' : 'p';
+      if (!pdf) pdf = new window.jspdf.jsPDF({ unit: 'pt', format: [w, hh], orientation: o, compress: true }); else pdf.addPage([w, hh], o);
+      pdf.addImage(c.toDataURL('image/jpeg', Q), 'JPEG', 0, 0, w, hh, undefined, 'FAST'); c.width = c.height = 0;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    if (stop) { pm.close(); toast('Export annulé'); return; }
+    fill.style.width = '100%'; txt.textContent = 'Finalisation…'; await new Promise(r => setTimeout(r, 40));
+    const blob = pdf.output('blob'); pm.close();
+    const name = (b.title || 'enquete').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) + ' - annoté.pdf';
+    const r = await deliverFile(blob, name); if (r) toast(`PDF prêt (${(blob.size / 1048576).toFixed(1)} Mo) ` + (r === 'share' ? 'via le partage' : 'dans « Téléchargements »'), 4500);
+  } catch (e) { console.error(e); pm.close(); toast('Échec de l’export (mémoire insuffisante ?). Essayez « Normale » ou « Annotées ».', 5500); }
+}
+
+/* ---------------------------------------------------------------- nouveautés */
+
+/* ---------------------------------------------------------------- bouton « retour » du téléphone */
+const NAV = { guard: false, skip: 0, t: 0 };
+const hasLayer = () => !!document.querySelector('.modal,.drawer-bg,#tuto') || (!!$('#reader') && !$('#reader').classList.contains('hidden'));
+function navSync() {
+  clearTimeout(NAV.t);
+  NAV.t = setTimeout(() => {
+    const need = hasLayer();
+    if (need && !NAV.guard) { try { history.pushState({ g: 1 }, ''); NAV.guard = true; } catch (e) { } }
+    else if (!need && NAV.guard) { NAV.guard = false; NAV.skip++; history.back(); }
+  }, 60);
+}
+function onBack() {
+  const tuto = $('#tuto'); if (tuto) { const b = tuto.querySelector('.tskip'); b && b.click(); return; }
+  const ms = [...document.querySelectorAll('.modal')]; const top = ms[ms.length - 1];
+  if (top) { if (top._noclose) { toast('Terminez cette étape (ou touchez « Passer »)', 2200); return; } top._api ? top._api.close(null) : top.remove(); return; }
+  const bg = document.querySelector('.drawer-bg'); if (bg) { bg.dispatchEvent(new Event('pointerdown')); return; }
+  if (S.cur && !$('#reader').classList.contains('hidden')) goHome();
+}
+function initNav() {
+  window.addEventListener('popstate', () => { if (NAV.skip > 0) { NAV.skip--; return; } NAV.guard = false; onBack(); navSync(); });
+  const mo = new MutationObserver(navSync); mo.observe(document.body, { childList: true });
+  if ($('#reader')) mo.observe($('#reader'), { attributes: true, attributeFilter: ['class'] });
+  navSync();
+}
+
+const APP_VER = '20';
+const NEWS = [
+  [17, '🔁', 'Les flèches d’indices font la boucle : après le dernier indice, on revient au premier (et inversement). Les indices validés restent sautés.'],
+  [17, '🎛️', 'Un interrupteur pour chaque outil (surligner, couleur, barrer, pinceau, gomme, annuler, enregistrer, page, notes, masquer des pages) dans Menu ≡ > « Personnaliser l’interface ». L’interface se réorganise toute seule.'],
+  [17, '📄', 'Menu ≡ > « Exporter le PDF annoté » : un PDF avec vos surlignages, croix et traits, à garder ou à partager.'],
+  [18, '🧩', 'Menu ≡ > « Personnaliser l’interface » : choisissez l’ordre des blocs (indice, pages, outils, navigation), par exemple l’indice entre les outils et la navigation.'],
+  [18, '🔎', 'Réglages fins de l’indice : taille du texte, hauteur du bandeau, liste et flèches à gauche ou à droite, colonne notes à gauche ou à droite, et affichage compact.'],
+  [19, '🖼️', 'Images dans les indices : en modifiant les indices, ajoutez l’image liée à un indice. Un bouton « Image » apparaît à côté de l’indice pour l’afficher, en plus ou à la place du texte.'],
+  [19, '🛡️', 'Boîte de sécurité : l’app garde des copies automatiques (chaque jour et avant chaque mise à jour), restaurables dans Paramètres > Sauvegarde.'],
+  [19, '📣', 'Annonces de mise à jour : bandeau à l’accueil, avertissement 30 minutes avant, rappel d’export 10 minutes avant (désactivable), et bouton pour redémarrer quand la nouvelle version est prête.'],
+  [19, '💾', 'Le rappel de sauvegarde est plus fiable : bandeau à l’accueil et vérification à chaque retour dans l’app.'],
+  [19, '👋', 'Premier lancement : l’app demande si vous avez déjà une sauvegarde et vous guide. Les enquêtes de la sauvegarde sans PDF apparaissent en tuiles grises à la fin de l’accueil (masquables sans toucher à la sauvegarde).'],
+  [19, '🔒', 'Vos enquêtes, votre progression et vos sauvegardes ne sont pas touchées par ces mises à jour.'],
+  [20, '❌', 'Fiches à barrer : pendant la préparation d’une enquête (ou Menu ≡ > « Fiches à barrer »), montrez une fiche à l’app. Ensuite, avec l’outil Barrer, un tap dans une fiche la barre en entier, sans dépasser. Les enquêtes d’une sauvegarde vous le demanderont à l’ouverture.'],
+  [20, '◀', 'Le bouton « retour » du téléphone ferme d’abord la fenêtre ouverte (indices, notes, paramètres…), puis ramène à l’accueil.'],
+  [20, '🔗', 'Les liens de solution écrits sans « https » (lecoupablenestpaslea.fr/…) sont maintenant reconnus.'],
+  [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).']
+];
+async function maybeShowNews(force) {
+  const st = S.settings, seen = parseInt(st.seenVer) || 0;
+  if (!force) { if (seen >= +APP_VER) return; if (S.firstRun) { st.seenVer = APP_VER; saveSettings(); return; } }
+  const items = force ? NEWS : NEWS.filter(n => n[0] > seen);
+  const body = h('div', {}, items.map(([v, e, t]) => h('div', { style: 'display:flex;gap:10px;margin:0 0 12px' }, h('span', { style: 'font-size:20px;line-height:1.3' }, e), h('div', {}, t))));
+  await openModal('Nouveautés', body, [{ label: 'Compris', cls: 'pri', value: 1 }]).promise;
+  if (st.seenVer !== APP_VER) { st.seenVer = APP_VER; saveSettings(); }
+}
 
 /* ---------------------------------------------------------------- tutoriel */
 const TUTO = {
@@ -1101,13 +1521,17 @@ function startTuto(kind) {
 (async function main() {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
   try { S.db = await openDB(); } catch (e) { document.body.innerHTML = '<p style="padding:30px;color:#fff">Le stockage local est indisponible dans ce navigateur (navigation privée ?).</p>'; return; }
-  await loadSettings(); S.books = await dbAll('books');
-  $('#file').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) addBooks(f); });
-  $('#importfile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importData(f); });
+  await loadSettings(); S.books = await dbAll('books'); await boxAuto(); await refreshPend();
+  S.bk = (await dbGet('kv', 'backupMeta')) || {}; if (!S.bk.since && S.books.length) { S.bk.since = Date.now(); await dbPut('kv', S.bk, 'backupMeta'); }
+  $('#file').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) addBooks(f).then(() => { if (S.wiz && S.wiz.step === 1) { S.wiz.m.close(); S.wiz.step = 2; wizStep2(); } }); });
+  $('#importfile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importData(f).then(ok => { if (ok && S.wiz && S.wiz.step === 2) { S.wiz.m.close(); S.wiz = null; } }); });
   S.firstRun = !S.settings.welcomed && !S.books.length; if (!S.settings.welcomed) { S.settings.welcomed = true; saveSettings(); }
   if (!S.settings.tutoInit) { S.settings.tutoInit = true; if (S.books.length) S.settings.tutoHome = S.settings.tutoReader = true; saveSettings(); }
-  renderHome(); setTimeout(checkBackupReminder, 700);
-  if (!S.settings.tutoHome) setTimeout(async () => { if (!S.cur) { await startTuto('home'); S.settings.tutoHome = true; saveSettings(); } }, 500);
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
+  const askFirst = S.firstRun && !S.settings.wizAsked;
+  renderHome(); setTimeout(async () => { await maybeShowNews(); if (askFirst) welcomeAsk(); await homeChecks(true); }, 600);
+  if (!S.settings.tutoHome && !askFirst) setTimeout(async () => { if (!S.cur && !document.querySelector('.modal')) { await startTuto('home'); S.settings.tutoHome = true; saveSettings(); } }, 500);
+  registerSW(); initNav();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { homeChecks(); annTick(); } });
+  setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal')) annTick(); }, 30000);
   window.__S = S; window.__V = V;
 })();

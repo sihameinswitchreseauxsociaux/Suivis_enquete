@@ -74,8 +74,15 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke
 @keyframes spin{to{transform:rotate(360deg)}}
 #mbtn{width:64px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:10px;padding:3px 4px;border-radius:10px;color:#c5cad8}
 #mbtn:active{background:var(--bar2)}
-body.nohide-brush [data-k=brush],body.h-brush [data-k=brush]{display:none}
-body.h-erase [data-k=erase]{display:none}body.h-undo [data-k=undo]{display:none}body.h-save #sv{visibility:hidden}
+body.h-hl [data-k=hl],body.h-col #colbtn,body.h-cross [data-k=cross],body.h-brush [data-k=brush],body.h-erase [data-k=erase],body.h-undo [data-k=undo],body.h-save #sv,body.h-page #pnav,body.h-notes #nbtn,body.h-pgoff #pgbtn{display:none!important}
+body.h-tools #bar .row.a{display:none}
+body.h-tools #bar .row.b{border-top:0;margin-top:0;padding-top:0}
+#bar .row.b #mbtn{margin-left:auto}
+#bar .row.a #sv,#bar .row.a #mbtn{min-width:54px;width:auto}
+#pnav{margin:0 auto}
+body.h-notes .cnote{display:none}
+body.h-side #cleft{display:none}
+body.h-side #cmain{border-left:5px solid var(--cc,#ccc);padding-left:9px;border-radius:3px}
 
 /* ---------- Modales, tiroir, toasts ---------- */
 .modal{position:fixed;inset:0;background:rgba(10,12,20,.6);z-index:50;display:flex;align-items:flex-end;justify-content:center}
@@ -294,3 +301,32 @@ input::placeholder,textarea::placeholder{color:#6b7389}
 .qn-ctx{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--mut);margin-bottom:8px}
 .qn-ctx .d{width:14px;height:14px;border-radius:50%;flex:none;margin-top:3px;border:1px solid rgba(255,255,255,.4)}
 #ctext.note,.ftab,.fplus{display:revert}
+
+/* ---------- V18 : interface personnalisable ---------- */
+#cmain{max-height:var(--cmh,112px)}
+#ctext{font-size:calc(16px*var(--ctxs,1))}
+#ctext.note{font-size:calc(15px*var(--ctxs,1))}
+#ctext.none{font-size:14px}
+.cnote{font-size:calc(12.5px*var(--ctxs,1))}
+#cluebar.ctl-left #cctl{order:-1}
+#cluebar.side-right #cleft{order:5}
+#reader.ui-custom{padding-top:var(--sat);padding-bottom:var(--sab)}
+#reader.ui-custom #bar{display:contents}
+#reader.ui-custom #bar .row{background:var(--bar);padding:4px 6px;margin:0;border-top:1px solid #333b4d}
+#reader.ui-custom #cluebar{padding-top:8px;border-top:1px solid rgba(128,128,128,.35)}
+body.compact #bar .tb>span:not(.sw):not([style]),body.compact #mbtn>span:not([style]),body.compact #sv>span:not([style]){display:none}
+body.compact #bar .tb{padding:4px 6px;min-width:46px}
+body.compact #cluebar{padding-top:calc(var(--sat) + 4px);padding-bottom:4px}
+body.compact #reader.ui-custom #cluebar{padding-top:4px}
+body.compact #ccount{min-height:18px}
+.modal .btn[disabled]{opacity:.35}
+
+/* ---------- V19 ---------- */
+body #cmain.showimg{max-height:min(55vh,460px)}
+.cimg{display:block;width:100%;max-width:100%;margin-top:6px;border-radius:6px;background:#fff}
+.hbanner{margin:8px 14px 0;padding:10px 12px;border-radius:12px;background:var(--bar2);color:var(--ink);display:flex;gap:10px;align-items:center;border-left:4px solid var(--accent)}
+.hbanner>div{flex:1;min-width:0}.hbanner small{display:block;opacity:.8;font-size:12px;margin-top:2px}
+.hbanner.warn{border-left-color:var(--warn)}.hbanner.ok{border-left-color:var(--ok)}
+.tile.pend{background:#8a8d96;border:2px dashed rgba(255,255,255,.55);box-shadow:none}
+.tile.pend .pn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px;text-align:center;color:#fff}
+.tile.pend .pe{font-size:30px}.tile.pend b{font-size:13px;line-height:1.25}.tile.pend small{font-size:11px;opacity:.85}

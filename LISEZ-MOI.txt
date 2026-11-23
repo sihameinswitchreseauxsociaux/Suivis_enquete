@@ -77,3 +77,53 @@ INDICES VALIDÉS
 
 === Icône ===
 - Android garde l'ancienne icône d'un raccourci : supprimez l'ancien raccourci (ou désinstallez l'app), puis rajoutez-la depuis le navigateur.
+
+=== V17 / V18 ===
+- Les flèches d'indices font la boucle (dernier -> premier, et inversement). Les indices validés restent sautés.
+- Menu ≡ > « Personnaliser l'interface » (ou Paramètres > Interface du lecteur) : un interrupteur pour Surligner, Couleur, Barrer, Pinceau, Gomme, Annuler,
+  Enregistrer, Page (flèches + numéro), Notes et Masquer des pages. L'interface se réorganise : la barre du bas rétrécit,
+  les outils restants se répartissent, Menu (et Enregistrer) montent sur la rangée des outils si la place le permet,
+  et sans Notes ni Masquer des pages le texte de l'indice s'élargit (une bande de couleur remplace la pastille).
+  « Masquer des pages » désactivé = toutes les pages s'affichent (rien n'est supprimé).
+- Menu ≡ > « Exporter le PDF annoté » : PDF avec surlignages, croix et traits (toutes les pages, seulement les annotées,
+  ou sans les masquées ; qualité normale ou haute). Fonctionne hors connexion.
+- Pop-up « Nouveautés » une seule fois après une mise à jour (Paramètres > Aide > Nouveautés pour le revoir).
+Mise à jour : déposez les fichiers sur GitHub au même endroit (ils remplacent les anciens), y compris le nouveau jspdf.umd.min.js.
+Vos données ne sont pas touchées (même adresse = mêmes données).
+
+V18 : Menu ≡ > « Personnaliser l'interface »
+- Ordre des blocs (Indice, Pages, Outils, Navigation) avec ▲ ▼ : par exemple l'indice entre les outils et la navigation.
+- Réglages de l'indice : taille du texte, hauteur maximale du bandeau, liste/flèches à gauche ou à droite,
+  colonne notes/pages masquées à gauche ou à droite.
+- Affichage compact (boutons sans texte, bandeau plus serré). « Tout remettre » revient à l'interface d'origine.
+- Le bouton Menu reste toujours accessible, quel que soit l'ordre choisi.
+Mise à jour (V17 et V18) : remplacez les fichiers sur GitHub en une seule validation (Commit) pour que tout soit cohérent.
+
+
+=====================================================================
+NOUVEAUTÉS V19 / V20 (à lire avant de mettre en ligne)
+=====================================================================
+
+COMMENT METTRE À JOUR SANS RISQUE
+- Remplacez TOUS les fichiers du dépôt GitHub par ceux du zip (même lien, même nom de dépôt).
+- Les données des utilisateurs sont dans leur téléphone, pas sur GitHub : elles ne sont pas touchées.
+- L'app fait elle-même une copie dans la « boîte de sécurité » avant chaque nouvelle version.
+- Conseil : prévenez vos utilisateurs de faire « Exporter » (Paramètres > Sauvegarde) de temps en temps.
+
+ANNONCER UNE MISE À JOUR À L'AVANCE (fichier annonce.json)
+1. Sur GitHub, ouvrez annonce.json, cliquez sur le crayon, et écrivez par exemple :
+   {"version":"21","date":"2026-12-05T20:00","message":"Nouvelles fonctions !","avant":30,"rappel":10}
+   - version : le numéro de la NOUVELLE version (ici 21, car l'actuelle est 20). Un numéro plus grand que celui de l'app.
+   - date : jour et heure (heure de France) de la mise à jour, format AAAA-MM-JJTHH:MM
+   - avant : minutes d'avance de l'avertissement (30), rappel : minutes d'avance du rappel d'export (10)
+2. Cliquez « Commit changes ». Les utilisateurs verront un bandeau à l'accueil à l'ouverture de l'app,
+   puis une fenêtre 30 minutes avant, et un rappel 10 minutes avant (désactivable chez eux).
+3. À l'heure dite, mettez en ligne les nouveaux fichiers.
+4. Après la mise à jour, remettez annonce.json à : {"version":"0","date":"","message":"","avant":30,"rappel":10}
+Limite : une app installée ne peut pas envoyer de notification quand elle est fermée (il faudrait un serveur).
+L'annonce s'affiche quand l'app est ouverte ou rouverte. Vous pouvez aussi la partager dans votre groupe.
+
+AUTRES NOUVEAUTÉS
+- Images dans les indices, fiches à barrer d'un tap, bouton retour du téléphone, liens sans https,
+  assistant de premier lancement / restauration, tuiles grises des enquêtes sans PDF,
+  Paramètres > Mise à jour (Rechercher / Réparer : ne touche jamais aux données).
