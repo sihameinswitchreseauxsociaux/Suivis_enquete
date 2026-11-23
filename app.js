@@ -857,7 +857,7 @@ const V = (() => {
         clearTmp();
         if (g.moved) { const p1 = toPage(q.x, q.y, g.p0.i); const r = rectOf(g.p0, p1); if (r.w > 0.02 && r.h > 0.02) newCross(g.p0.i, r); }
         else if (!book.crossSize) toast('Première croix : faites glisser du doigt pour tracer la taille d’une fiche (ou Menu ≡ > Fiches à barrer). Ensuite un simple tap suffira.', 4500);
-        else newCross(g.p0.i, cardRect(g.p0)); break;
+        else cardFit(g.p0).then(r => newCross(g.p0.i, r, true)); break;
       }
       case 'brush': { clearTmp(); if (g.pts.length) addAnn({ t: 'b', page: g.p0.i, pts: g.pts, w: S.settings.brushW }); break; }
       case 'erase': if (g.did) { pushUndo(g.before); if (S.cur.status === 'new') S.cur.status = 'doing'; updateToolUI(); changed(); } break;
@@ -865,17 +865,49 @@ const V = (() => {
       case 'desel': if (!g.moved) { S.sel = null; api.redrawAll(); updateToolUI(); } break;
     }
   }
-  function cardRect(p) {
-    const sz = book.crossSize, g = book.cardGrid, R = pages[p.i].ratio; let cx = p.x, cy = p.y;
+  function gridCell(p) {
+    const sz = book.crossSize, g = book.cardGrid; let cx = p.x, cy = p.y, snapped = false;
     if (g) {
       const gx = g.x + g.w / 2, gy = g.y + g.h / 2; let sx = cx, sy = cy;
       if (g.px) sx = gx + Math.round((p.x - gx) / g.px) * g.px;
       if (g.py) sy = gy + Math.round((p.y - gy) / g.py) * g.py;
-      if (Math.abs(p.x - sx) <= sz.w / 2 && Math.abs(p.y - sy) <= sz.h / 2) { cx = sx; cy = sy; }
+      if (Math.abs(p.x - sx) <= sz.w / 2 && Math.abs(p.y - sy) <= sz.h / 2) { cx = sx; cy = sy; snapped = true; }
     }
-    return { x: clamp(cx - sz.w / 2, 0, Math.max(0, 1 - sz.w)), y: clamp(cy - sz.h / 2, 0, Math.max(0, R - sz.h)), w: sz.w, h: sz.h };
+    return { cx, cy, snapped };
   }
-  function newCross(i, r) { addAnn({ t: 'x', page: i, ...r, th: book.crossTh || S.settings.thick, shape: S.settings.shape }); book.crossSize = { w: r.w, h: r.h }; }
+  const grabCache = new Map();
+  async function grab(i, W) {
+    const k = book.id + '|' + i + '|' + W; if (grabCache.has(k)) return grabCache.get(k);
+    const pg = await S.doc.getPage(i + 1), base = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: W / base.width });
+    const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height); const ctx = c.getContext('2d', { willReadFrequently: true });
+    await pg.render({ canvasContext: ctx, viewport: v }).promise; const d = ctx.getImageData(0, 0, c.width, c.height); c.width = c.height = 0;
+    const o = { w: d.width, h: d.height, d: d.data }; grabCache.set(k, o); if (grabCache.size > 8) grabCache.delete(grabCache.keys().next().value); return o;
+  }
+  /* retrouve la fiche exacte sous le doigt : on compare l'aspect de la fiche modèle avec la page, autour de la case prévue par la grille */
+  async function cardFit(p) {
+    const sz = book.crossSize, g = book.cardGrid, R = pages[p.i].ratio; const c = gridCell(p); let cx = c.cx, cy = c.cy, how = c.snapped ? 'grille' : 'doigt';
+    if (g) {
+      try {
+        const W = 320, A = await grab(g.page, W), B = await grab(p.i, W);
+        const tw = Math.max(8, Math.round(g.w * W)), th = Math.max(8, Math.round(g.h * W)), tx = Math.round(g.x * W), ty = Math.round(g.y * W);
+        const x0 = Math.round(cx * W - tw / 2), y0 = Math.round(cy * W - th / 2);
+        const rx = Math.round((g.px ? Math.abs(g.px) * 0.4 : g.w * 0.4) * W), ry = Math.round((g.py ? Math.abs(g.py) * 0.4 : g.h * 0.4) * W);
+        let best = 1e18, bx = x0, by = y0, sum = 0, n = 0;
+        for (let dy = -ry; dy <= ry; dy++) for (let dx = -rx; dx <= rx; dx++) {
+          const ox = x0 + dx, oy = y0 + dy; if (ox < 0 || oy < 0 || ox + tw > B.w || oy + th > B.h) continue;
+          let sad = 0, m = 0;
+          for (let yy = 0; yy < th; yy += 3) { let ia = ((ty + yy) * A.w + tx) * 4, ib = ((oy + yy) * B.w + ox) * 4; for (let xx = 0; xx < tw; xx += 3, ia += 12, ib += 12) { sad += Math.abs(A.d[ia] - B.d[ib]) + Math.abs(A.d[ia + 1] - B.d[ib + 1]) + Math.abs(A.d[ia + 2] - B.d[ib + 2]); m++; } }
+          sad /= m; sum += sad; n++; if (sad < best) { best = sad; bx = ox; by = oy; }
+        }
+        const mean = n ? sum / n : 0; const nx = (bx + tw / 2) / W, ny = (by + th / 2) / W;
+        if (n > 4 && best < mean * 0.8 && Math.abs(p.x - nx) <= sz.w * 0.6 && Math.abs(p.y - ny) <= sz.h * 0.6) { cx = nx; cy = ny; how = 'fiche'; }
+      } catch (e) { console.error(e); }
+    }
+    const ins = Math.min(sz.w, sz.h) * 0.015 + (book.crossTh || S.settings.thick) * 0.5, w = Math.max(0.02, sz.w - 2 * ins), hh = Math.max(0.02, sz.h - 2 * ins);
+    S.lastFit = how;
+    return { x: clamp(cx - w / 2, 0, Math.max(0, 1 - w)), y: clamp(cy - hh / 2, 0, Math.max(0, R - hh)), w, h: hh };
+  }
+  function newCross(i, r, keep) { addAnn({ t: 'x', page: i, ...r, th: book.crossTh || S.settings.thick, shape: S.settings.shape }); if (!keep) book.crossSize = { w: r.w, h: r.h }; }
   async function tapWord(p0) {
     try {
       const g = await getGray(p0.i); const r = detectWord(g.data, g.w, g.h, p0.x * g.w, p0.y * g.w, S.settings.sens);
@@ -1442,7 +1474,7 @@ function initNav() {
   navSync();
 }
 
-const APP_VER = '20';
+const APP_VER = '21';
 const NEWS = [
   [17, '🔁', 'Les flèches d’indices font la boucle : après le dernier indice, on revient au premier (et inversement). Les indices validés restent sautés.'],
   [17, '🎛️', 'Un interrupteur pour chaque outil (surligner, couleur, barrer, pinceau, gomme, annuler, enregistrer, page, notes, masquer des pages) dans Menu ≡ > « Personnaliser l’interface ». L’interface se réorganise toute seule.'],
@@ -1458,7 +1490,8 @@ const NEWS = [
   [20, '❌', 'Fiches à barrer : pendant la préparation d’une enquête (ou Menu ≡ > « Fiches à barrer »), montrez une fiche à l’app. Ensuite, avec l’outil Barrer, un tap dans une fiche la barre en entier, sans dépasser. Les enquêtes d’une sauvegarde vous le demanderont à l’ouverture.'],
   [20, '◀', 'Le bouton « retour » du téléphone ferme d’abord la fenêtre ouverte (indices, notes, paramètres…), puis ramène à l’accueil.'],
   [20, '🔗', 'Les liens de solution écrits sans « https » (lecoupablenestpaslea.fr/…) sont maintenant reconnus.'],
-  [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).']
+  [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).'],
+  [21, '🎯', 'Fiches à barrer plus précises : l’app retrouve la fiche exacte sous votre doigt et la barre sans dépasser sur les fiches voisines.']
 ];
 async function maybeShowNews(force) {
   const st = S.settings, seen = parseInt(st.seenVer) || 0;
