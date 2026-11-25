@@ -854,7 +854,7 @@ const V = (() => {
         tx += dx; ty += dy; gest.vx = 0.8 * (dx / dt) + 0.2 * gest.vx; gest.vy = 0.8 * (dy / dt) + 0.2 * gest.vy; gest.lx = q.x; gest.ly = q.y; gest.lt = now; clampT(); applyT(); break;
       }
       case 'hl': case 'cdraw': if (gest.moved && gest.type === 'cdraw' && book.cardGrid) { toPan(q); break; }
-        if (gest.moved && gest.type === 'hl') { if (!gest.mode) gest.mode = gest.onWord ? 'sweep' : 'pan'; if (gest.mode === 'pan') { toPan(q); break; } sweep(gest, q); break; }
+        if (gest.moved && gest.type === 'hl') { toPan(q); break; }
         if (gest.moved) { const p1 = toPage(q.x, q.y, gest.p0.i); const r = rectOf(gest.p0, p1); tmpDraw(gest.p0.i, gest.type === 'hl' ? `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${curColor()}" fill-opacity="0.35" stroke="${curColor()}" stroke-width="0.002"/>` : `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${curColor()}" stroke-width="0.004" stroke-dasharray="0.01 0.01"/>`); } break;
       case 'brush': { const p1 = toPage(q.x, q.y, gest.p0.i); const l = gest.pts[gest.pts.length - 1]; if (Math.hypot(p1.x - l[0], p1.y - l[1]) > 0.0012) { gest.pts.push([esc(p1.x), esc(p1.y)]); tmpDraw(gest.p0.i, brushTmp(gest.p0.i, gest.pts)); } break; }
       case 'erase': eraseAt(q); break;
@@ -1518,7 +1518,7 @@ const NEWS = [
   [20, '🔗', 'Les liens de solution écrits sans « https » (lecoupablenestpaslea.fr/…) sont maintenant reconnus.'],
   [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).'],
   [21, '🎯', 'Fiches à barrer plus précises : l’app retrouve la fiche exacte sous votre doigt et la barre sans dépasser sur les fiches voisines.'],
-  [22, '👆', 'Surligneur : plus de trait libre. Touchez un mot pour le surligner, ou glissez sur des mots pour les surligner un à un. Un doigt qui glisse depuis un espace vide fait défiler la page (pratique en zoom).'],
+  [22, '👆', 'Surligneur : plus de trait libre. Touchez un mot pour le surligner ; un doigt qui glisse (n’importe où) fait défiler la page, pratique en zoom.'],
   [22, '❌', 'Avec des fiches à barrer réglées, un doigt qui glisse fait défiler la page ; un simple tap barre la fiche.']
 ];
 async function maybeShowNews(force) {
@@ -1547,7 +1547,7 @@ const TUTO = {
     { sel: '#cvalid', t: 'Valider un indice', d: 'Une fois un indice exploité, touchez « Valider » : les flèches le sauteront et il sera marqué comme terminé dans la liste. Retouchez le bouton (ou le rond ✓ dans la liste) pour le réactiver.' },
     { sel: '#pgbtn', t: 'Pages masquées', d: 'Appui long : masquer la page où vous êtes. Appui simple : afficher ou re-masquer les pages masquées. Elles ne sont jamais supprimées.' },
     { sel: '#vp', t: 'Lire les pages', d: 'Un doigt pour faire défiler. Pincez pour zoomer, deux doigts pour déplacer, double tap pour zoomer vite.' },
-    { sel: '#bar [data-k=hl]', t: 'Surligner', d: 'Activez l’outil puis touchez un prénom : il est surligné dans la couleur de l’indice. Glissez le doigt sur des mots pour les surligner un à un ; si vous commencez dans un espace vide, la page défile. Appui long sur l’outil : ses réglages.' },
+    { sel: '#bar [data-k=hl]', t: 'Surligner', d: 'Activez l’outil puis touchez un prénom : il est surligné dans la couleur de l’indice. Un glissement de doigt fait défiler la page (il ne surligne rien). Appui long sur l’outil : ses réglages.' },
     { sel: '#colbtn', t: 'Couleur', d: 'Chaque indice a sa couleur, choisie automatiquement. Touchez ici pour la changer : elle change aussi pour tout ce que vous avez déjà marqué avec cet indice.' },
     { sel: '#bar [data-k=cross]', t: 'Barrer', d: 'La première fois, faites glisser sur une fiche pour donner la taille ; ensuite un tap suffit. Appui long sur une croix : la redimensionner ou l’effacer.' },
     { sel: '#bar [data-k=erase]', t: 'Gomme, pinceau, annuler', d: 'Appui long sur la gomme : effacer l’élément entier ou seulement le trait touché. « Annuler » revient en arrière.' },
