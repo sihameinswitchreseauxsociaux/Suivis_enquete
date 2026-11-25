@@ -775,7 +775,10 @@ const V = (() => {
     const t = S.tool;
     if (!t) { gest = { type: 'pan', lx: q.x, ly: q.y, lt: performance.now(), vx: 0, vy: 0, moved: false, x0: q.x, y0: q.y }; return; }
     const pp = toPage(q.x, q.y); const base = { x0: q.x, y0: q.y, p0: pp, moved: false };
-    if (t === 'hl') gest = { type: 'hl', ...base, cancel: clearTmp };
+    if (t === 'hl') {
+      const g = { type: 'hl', ...base, cancel: clearTmp, words: [], last: pp }; gest = g;
+      getGray(pp.i).then(gr => { g.gray = gr; g.onWord = !!detectWord(gr.data, gr.w, gr.h, pp.x * gr.w, pp.y * gr.w, S.settings.sens); }).catch(() => { });
+    }
     else if (t === 'brush') { gest = { type: 'brush', ...base, pts: [[esc(pp.x), esc(pp.y)]], cancel: clearTmp }; tmpDraw(pp.i, brushTmp(pp.i, gest.pts)); }
     else if (t === 'erase') { gest = { type: 'erase', ...base, before: snap(), prev: null }; eraseAt(q); }
     else if (t === 'cross') {
@@ -818,6 +821,25 @@ const V = (() => {
   }
   const rectOf = (p0, p1) => ({ x: Math.min(p0.x, p1.x), y: Math.min(p0.y, p1.y), w: Math.abs(p1.x - p0.x), h: Math.abs(p1.y - p0.y) });
 
+  /* un doigt qui glisse depuis un espace vide fait défiler la page */
+  function toPan(q) {
+    const g = gest; clearTmp();
+    gest = { type: 'pan', lx: q.x, ly: q.y, lt: performance.now(), vx: 0, vy: 0, moved: true, x0: g.x0, y0: g.y0 };
+    tx += q.x - g.x0; ty += q.y - g.y0; clampT(); applyT();
+  }
+  /* glissé depuis un mot : surligne chaque mot touché (jamais un trait libre) */
+  function sweep(g, q) {
+    const p1 = toPage(q.x, q.y, g.p0.i), gr = g.gray; if (!gr) return;
+    const n = Math.max(1, Math.ceil(Math.hypot(p1.x - g.last.x, p1.y - g.last.y) / 0.004));
+    for (let k = 1; k <= n; k++) {
+      const x = g.last.x + (p1.x - g.last.x) * k / n, y = g.last.y + (p1.y - g.last.y) * k / n;
+      if (g.words.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)) continue;
+      const r = detectWord(gr.data, gr.w, gr.h, x * gr.w, y * gr.w, S.settings.sens);
+      if (r && !g.words.some(o => Math.abs(o.x - r.x) < r.w * 0.3 && Math.abs(o.y - r.y) < r.h * 0.5)) g.words.push(r);
+    }
+    g.last = p1;
+    tmpDraw(g.p0.i, g.words.map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${curColor()}" fill-opacity="0.35"/>`).join(''));
+  }
   function onMove(e) {
     if (!ptrs.has(e.pointerId)) return; const q = P(e); ptrs.set(e.pointerId, { x: q.x, y: q.y });
     if (!gest) return;
@@ -831,7 +853,9 @@ const V = (() => {
         const now = performance.now(), dt = Math.max(1, now - gest.lt); const dx = q.x - gest.lx, dy = q.y - gest.ly;
         tx += dx; ty += dy; gest.vx = 0.8 * (dx / dt) + 0.2 * gest.vx; gest.vy = 0.8 * (dy / dt) + 0.2 * gest.vy; gest.lx = q.x; gest.ly = q.y; gest.lt = now; clampT(); applyT(); break;
       }
-      case 'hl': case 'cdraw': if (gest.moved) { const p1 = toPage(q.x, q.y, gest.p0.i); const r = rectOf(gest.p0, p1); tmpDraw(gest.p0.i, gest.type === 'hl' ? `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${curColor()}" fill-opacity="0.35" stroke="${curColor()}" stroke-width="0.002"/>` : `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${curColor()}" stroke-width="0.004" stroke-dasharray="0.01 0.01"/>`); } break;
+      case 'hl': case 'cdraw': if (gest.moved && gest.type === 'cdraw' && book.cardGrid) { toPan(q); break; }
+        if (gest.moved && gest.type === 'hl') { if (!gest.mode) gest.mode = gest.onWord ? 'sweep' : 'pan'; if (gest.mode === 'pan') { toPan(q); break; } sweep(gest, q); break; }
+        if (gest.moved) { const p1 = toPage(q.x, q.y, gest.p0.i); const r = rectOf(gest.p0, p1); tmpDraw(gest.p0.i, gest.type === 'hl' ? `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${curColor()}" fill-opacity="0.35" stroke="${curColor()}" stroke-width="0.002"/>` : `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${curColor()}" stroke-width="0.004" stroke-dasharray="0.01 0.01"/>`); } break;
       case 'brush': { const p1 = toPage(q.x, q.y, gest.p0.i); const l = gest.pts[gest.pts.length - 1]; if (Math.hypot(p1.x - l[0], p1.y - l[1]) > 0.0012) { gest.pts.push([esc(p1.x), esc(p1.y)]); tmpDraw(gest.p0.i, brushTmp(gest.p0.i, gest.pts)); } break; }
       case 'erase': eraseAt(q); break;
       case 'move': { const p1 = toPage(q.x, q.y, gest.a.page); gest.a.x = p1.x - gest.ox; gest.a.y = p1.y - gest.oy; api.drawPage(gest.a.page); break; }
@@ -850,7 +874,9 @@ const V = (() => {
       }
       case 'hl': {
         clearTmp();
-        if (g.moved) { const p1 = toPage(q.x, q.y, g.p0.i); const r = rectOf(g.p0, p1); if (r.w > 0.01 && r.h > 0.004) addAnn({ t: 'h', page: g.p0.i, ...r }); }
+        if (g.moved) {
+          const ws = g.words || []; if (ws.length) { const before = snap(); const cl = (curClue() || {}).id || null; ws.forEach(r => { const a = { t: 'h', page: g.p0.i, ...r, id: uid(), clue: cl }; if (!cl) a.color = S.lastCol; S.cur.ann.push(a); }); pushUndo(before); if (S.cur.status === 'new') S.cur.status = 'doing'; api.drawPage(g.p0.i); changed(); }
+        }
         else tapWord(g.p0); break;
       }
       case 'cdraw': {
@@ -1474,7 +1500,7 @@ function initNav() {
   navSync();
 }
 
-const APP_VER = '21';
+const APP_VER = '22';
 const NEWS = [
   [17, '🔁', 'Les flèches d’indices font la boucle : après le dernier indice, on revient au premier (et inversement). Les indices validés restent sautés.'],
   [17, '🎛️', 'Un interrupteur pour chaque outil (surligner, couleur, barrer, pinceau, gomme, annuler, enregistrer, page, notes, masquer des pages) dans Menu ≡ > « Personnaliser l’interface ». L’interface se réorganise toute seule.'],
@@ -1491,7 +1517,9 @@ const NEWS = [
   [20, '◀', 'Le bouton « retour » du téléphone ferme d’abord la fenêtre ouverte (indices, notes, paramètres…), puis ramène à l’accueil.'],
   [20, '🔗', 'Les liens de solution écrits sans « https » (lecoupablenestpaslea.fr/…) sont maintenant reconnus.'],
   [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).'],
-  [21, '🎯', 'Fiches à barrer plus précises : l’app retrouve la fiche exacte sous votre doigt et la barre sans dépasser sur les fiches voisines.']
+  [21, '🎯', 'Fiches à barrer plus précises : l’app retrouve la fiche exacte sous votre doigt et la barre sans dépasser sur les fiches voisines.'],
+  [22, '👆', 'Surligneur : plus de trait libre. Touchez un mot pour le surligner, ou glissez sur des mots pour les surligner un à un. Un doigt qui glisse depuis un espace vide fait défiler la page (pratique en zoom).'],
+  [22, '❌', 'Avec des fiches à barrer réglées, un doigt qui glisse fait défiler la page ; un simple tap barre la fiche.']
 ];
 async function maybeShowNews(force) {
   const st = S.settings, seen = parseInt(st.seenVer) || 0;
@@ -1519,7 +1547,7 @@ const TUTO = {
     { sel: '#cvalid', t: 'Valider un indice', d: 'Une fois un indice exploité, touchez « Valider » : les flèches le sauteront et il sera marqué comme terminé dans la liste. Retouchez le bouton (ou le rond ✓ dans la liste) pour le réactiver.' },
     { sel: '#pgbtn', t: 'Pages masquées', d: 'Appui long : masquer la page où vous êtes. Appui simple : afficher ou re-masquer les pages masquées. Elles ne sont jamais supprimées.' },
     { sel: '#vp', t: 'Lire les pages', d: 'Un doigt pour faire défiler. Pincez pour zoomer, deux doigts pour déplacer, double tap pour zoomer vite.' },
-    { sel: '#bar [data-k=hl]', t: 'Surligner', d: 'Activez l’outil puis touchez un prénom : il est surligné dans la couleur de l’indice. Faites glisser pour tracer une zone. Appui long sur l’outil : ses réglages.' },
+    { sel: '#bar [data-k=hl]', t: 'Surligner', d: 'Activez l’outil puis touchez un prénom : il est surligné dans la couleur de l’indice. Glissez le doigt sur des mots pour les surligner un à un ; si vous commencez dans un espace vide, la page défile. Appui long sur l’outil : ses réglages.' },
     { sel: '#colbtn', t: 'Couleur', d: 'Chaque indice a sa couleur, choisie automatiquement. Touchez ici pour la changer : elle change aussi pour tout ce que vous avez déjà marqué avec cet indice.' },
     { sel: '#bar [data-k=cross]', t: 'Barrer', d: 'La première fois, faites glisser sur une fiche pour donner la taille ; ensuite un tap suffit. Appui long sur une croix : la redimensionner ou l’effacer.' },
     { sel: '#bar [data-k=erase]', t: 'Gomme, pinceau, annuler', d: 'Appui long sur la gomme : effacer l’élément entier ou seulement le trait touché. « Annuler » revient en arrière.' },

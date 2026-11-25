@@ -112,8 +112,8 @@ COMMENT METTRE À JOUR SANS RISQUE
 
 ANNONCER UNE MISE À JOUR À L'AVANCE (fichier annonce.json)
 1. Sur GitHub, ouvrez annonce.json, cliquez sur le crayon, et écrivez par exemple :
-   {"version":"22","date":"2026-12-05T20:00","message":"Nouvelles fonctions !","avant":30,"rappel":10}
-   - version : le numéro de la NOUVELLE version (ici 22, car l'actuelle est 21). Un numéro plus grand que celui de l'app.
+   {"version":"23","date":"2026-12-05T20:00","message":"Nouvelles fonctions !","avant":30,"rappel":10}
+   - version : le numéro de la NOUVELLE version (ici 23, car l'actuelle est 22). Un numéro plus grand que celui de l'app.
    - date : jour et heure (heure de France) de la mise à jour, format AAAA-MM-JJTHH:MM
    - avant : minutes d'avance de l'avertissement (30), rappel : minutes d'avance du rappel d'export (10)
 2. Cliquez « Commit changes ». Les utilisateurs verront un bandeau à l'accueil à l'ouverture de l'app,
