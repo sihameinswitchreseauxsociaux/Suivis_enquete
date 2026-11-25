@@ -112,8 +112,8 @@ COMMENT METTRE À JOUR SANS RISQUE
 
 ANNONCER UNE MISE À JOUR À L'AVANCE (fichier annonce.json)
 1. Sur GitHub, ouvrez annonce.json, cliquez sur le crayon, et écrivez par exemple :
-   {"version":"23","date":"2026-12-05T20:00","message":"Nouvelles fonctions !","avant":30,"rappel":10}
-   - version : le numéro de la NOUVELLE version (ici 23, car l'actuelle est 22). Un numéro plus grand que celui de l'app.
+   {"version":"24","date":"2026-12-05T20:00","message":"Nouvelles fonctions !","avant":30,"rappel":10}
+   - version : le numéro de la NOUVELLE version (ici 24, car l'actuelle est 23). Un numéro plus grand que celui de l'app.
    - date : jour et heure (heure de France) de la mise à jour, format AAAA-MM-JJTHH:MM
    - avant : minutes d'avance de l'avertissement (30), rappel : minutes d'avance du rappel d'export (10)
 2. Cliquez « Commit changes ». Les utilisateurs verront un bandeau à l'accueil à l'ouverture de l'app,
@@ -127,3 +127,7 @@ AUTRES NOUVEAUTÉS
 - Images dans les indices, fiches à barrer d'un tap, bouton retour du téléphone, liens sans https,
   assistant de premier lancement / restauration, tuiles grises des enquêtes sans PDF,
   Paramètres > Mise à jour (Rechercher / Réparer : ne touche jamais aux données).
+
+
+RÈGLE IMPORTANTE : à chaque envoi de nouveaux fichiers, le numéro de version doit changer (APP_VER dans app.js et enquetes-vNN dans sw.js),
+sinon les téléphones gardent l'ancienne version en mémoire. Les zips fournis respectent cette règle.

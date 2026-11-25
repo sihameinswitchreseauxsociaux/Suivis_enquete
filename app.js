@@ -1500,7 +1500,7 @@ function initNav() {
   navSync();
 }
 
-const APP_VER = '22';
+const APP_VER = '23';
 const NEWS = [
   [17, '🔁', 'Les flèches d’indices font la boucle : après le dernier indice, on revient au premier (et inversement). Les indices validés restent sautés.'],
   [17, '🎛️', 'Un interrupteur pour chaque outil (surligner, couleur, barrer, pinceau, gomme, annuler, enregistrer, page, notes, masquer des pages) dans Menu ≡ > « Personnaliser l’interface ». L’interface se réorganise toute seule.'],
@@ -1519,7 +1519,8 @@ const NEWS = [
   [20, '🔄', 'Paramètres > Mise à jour : bouton « Rechercher une mise à jour » et bouton « Réparer l’app » (vos données ne sont pas touchées).'],
   [21, '🎯', 'Fiches à barrer plus précises : l’app retrouve la fiche exacte sous votre doigt et la barre sans dépasser sur les fiches voisines.'],
   [22, '👆', 'Surligneur : plus de trait libre. Touchez un mot pour le surligner ; un doigt qui glisse (n’importe où) fait défiler la page, pratique en zoom.'],
-  [22, '❌', 'Avec des fiches à barrer réglées, un doigt qui glisse fait défiler la page ; un simple tap barre la fiche.']
+  [22, '❌', 'Avec des fiches à barrer réglées, un doigt qui glisse fait défiler la page ; un simple tap barre la fiche.'],
+  [23, '🔧', 'Correction du surligneur : un glissement de doigt fait toujours défiler la page, sans rien surligner. Seul un tap sur un mot le surligne.']
 ];
 async function maybeShowNews(force) {
   const st = S.settings, seen = parseInt(st.seenVer) || 0;
